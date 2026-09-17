@@ -1,2465 +1,2097 @@
-"use strict";
-
-/* =====================================================
+/* =========================================================
    GGL QMS CONTROL CENTER
-   FRONTEND APPLICATION
-   ===================================================== */
-
-
-/* =====================================================
-   API CONFIGURATION
-   ===================================================== */
+   FINAL FRONTEND SCRIPT
+   API + AUTH + RBAC + DASHBOARD + CRUD + FILES + REPORTS
+   ========================================================= */
 
 const API_URL =
-    "https://script.google.com/macros/s/AKfycbwnmtkqrVmggRbZnJserN_y5DwB4BPQ96oeCyoqbvXGBevmdGpqCh3TkVSDE8g6-2Kyrw/exec";
+  "https://script.google.com/macros/s/AKfycbwnmtkqrVmggRbZnJserN_y5DwB4BPQ96oeCyoqbvXGBevmdGpqCh3TkVSDE8g6-2Kyrw/exec";
 
 
-/* =====================================================
-   APPLICATION STATE
-   ===================================================== */
+/* =========================================================
+   GLOBAL STATE
+   ========================================================= */
 
-const App = {
+let currentUser = null;
+let sessionToken = null;
+let currentModule = null;
+let currentRecordId = null;
 
-    token: null,
-
-    user: null,
-
-    currentPage: "dashboard"
-
-};
+const STORAGE_TOKEN = "GGL_QMS_TOKEN";
+const STORAGE_USER = "GGL_QMS_USER";
 
 
-/* =====================================================
-   DOM
-   ===================================================== */
+/* =========================================================
+   INITIALIZATION
+   ========================================================= */
 
-const DOM = {
-
-    loginPage:
-        document.getElementById("loginPage"),
-
-    application:
-        document.getElementById("application"),
-
-    loginForm:
-        document.getElementById("loginForm"),
-
-    username:
-        document.getElementById("username"),
-
-    password:
-        document.getElementById("password"),
-
-    loginButton:
-        document.getElementById("loginButton"),
-
-    loginButtonText:
-        document.getElementById("loginButtonText"),
-
-    loginLoader:
-        document.getElementById("loginLoader"),
-
-    loginError:
-        document.getElementById("loginError"),
-
-    togglePassword:
-        document.getElementById("togglePassword"),
-
-    logoutButton:
-        document.getElementById("logoutButton"),
-
-    adminNavigation:
-        document.getElementById("adminNavigation"),
-
-    userName:
-        document.getElementById("userName"),
-
-    userRole:
-        document.getElementById("userRole"),
-
-    pageTitle:
-        document.getElementById("pageTitle"),
-
-    pageContent:
-        document.getElementById("pageContent"),
-
-    mobileMenu:
-        document.getElementById("mobileMenu"),
-
-    sidebar:
-        document.getElementById("sidebar"),
-
-    forgotPasswordBtn:
-        document.getElementById("forgotPasswordBtn"),
-
-    forgotPasswordModal:
-        document.getElementById("forgotPasswordModal"),
-
-    closeForgotPasswordBtn:
-        document.getElementById("closeForgotPasswordBtn"),
-
-    forgotStep1:
-        document.getElementById("forgotStep1"),
-
-    forgotStep2:
-        document.getElementById("forgotStep2"),
-
-    resetRequestForm:
-        document.getElementById("resetRequestForm"),
-
-    resetPasswordForm:
-        document.getElementById("resetPasswordForm"),
-
-    resetUsername:
-        document.getElementById("resetUsername"),
-
-    resetCode:
-        document.getElementById("resetCode"),
-
-    newResetPassword:
-        document.getElementById("newResetPassword"),
-
-    confirmResetPassword:
-        document.getElementById("confirmResetPassword"),
-
-    sendResetCodeBtn:
-        document.getElementById("sendResetCodeBtn"),
-
-    resetPasswordBtn:
-        document.getElementById("resetPasswordBtn"),
-
-    backToResetUsernameBtn:
-        document.getElementById(
-            "backToResetUsernameBtn"
-        ),
-
-    resetMessage:
-        document.getElementById("resetMessage")
-
-};
+document.addEventListener("DOMContentLoaded", function () {
+  restoreSession();
+  initializeUI();
+});
 
 
-/* =====================================================
-   INIT
-   ===================================================== */
+function initializeUI() {
+  setupLoginForm();
+  setupForgotPassword();
+  setupNavigation();
+  setupLogout();
 
-document.addEventListener(
-    "DOMContentLoaded",
-    init
-);
+  const loginPage = document.getElementById("loginPage");
+  const appPage = document.getElementById("appPage");
 
-
-function init() {
-
-    bindEvents();
-
-    restoreSession();
-
+  if (sessionToken && currentUser) {
+    showApp();
+    loadDashboard();
+  } else {
+    if (loginPage) loginPage.style.display = "";
+    if (appPage) appPage.style.display = "none";
+  }
 }
 
 
-/* =====================================================
-   EVENTS
-   ===================================================== */
+/* =========================================================
+   SESSION
+   ========================================================= */
 
-function bindEvents() {
+function restoreSession() {
+  try {
+    sessionToken = localStorage.getItem(STORAGE_TOKEN);
+    const savedUser = localStorage.getItem(STORAGE_USER);
 
-    /* Login */
-
-    DOM.loginForm?.addEventListener(
-        "submit",
-        handleLogin
-    );
-
-
-    /* Password visibility */
-
-    DOM.togglePassword?.addEventListener(
-        "click",
-        togglePassword
-    );
-
-
-    /* Logout */
-
-    DOM.logoutButton?.addEventListener(
-        "click",
-        handleLogout
-    );
-
-
-    /* Forgot password */
-
-    DOM.forgotPasswordBtn?.addEventListener(
-        "click",
-        openForgotPassword
-    );
-
-
-    DOM.closeForgotPasswordBtn?.addEventListener(
-        "click",
-        closeForgotPassword
-    );
-
-
-    DOM.resetRequestForm?.addEventListener(
-        "submit",
-        event => {
-
-            event.preventDefault();
-
-            sendResetCode();
-
-        }
-    );
-
-
-    DOM.resetPasswordForm?.addEventListener(
-        "submit",
-        event => {
-
-            event.preventDefault();
-
-            resetPassword();
-
-        }
-    );
-
-
-    DOM.backToResetUsernameBtn?.addEventListener(
-        "click",
-        backToResetUsername
-    );
-
-
-    /* Navigation */
-
-    document
-        .querySelectorAll(".nav-item")
-        .forEach(button => {
-
-            button.addEventListener(
-                "click",
-                () => {
-
-                    const page =
-                        button.dataset.page;
-
-                    if (page) {
-
-                        navigate(page);
-
-                    }
-
-                }
-            );
-
-        });
-
-
-    /* Mobile */
-
-    DOM.mobileMenu?.addEventListener(
-        "click",
-        () => {
-
-            DOM.sidebar?.classList.toggle(
-                "mobile-open"
-            );
-
-        }
-    );
-
-
-    /* Click outside modal */
-
-    DOM.forgotPasswordModal?.addEventListener(
-        "click",
-        event => {
-
-            if (
-                event.target ===
-                DOM.forgotPasswordModal
-            ) {
-
-                closeForgotPassword();
-
-            }
-
-        }
-    );
-
-
-    /* Escape key */
-
-    document.addEventListener(
-        "keydown",
-        event => {
-
-            if (
-                event.key === "Escape" &&
-                DOM.forgotPasswordModal?.classList.contains(
-                    "show"
-                )
-            ) {
-
-                closeForgotPassword();
-
-            }
-
-        }
-    );
-
+    if (savedUser) {
+      currentUser = JSON.parse(savedUser);
+    }
+  } catch (error) {
+    console.error("SESSION RESTORE ERROR:", error);
+    clearSession();
+  }
 }
 
 
-/* =====================================================
+function saveSession(token, user) {
+  sessionToken = token;
+  currentUser = user;
+
+  localStorage.setItem(STORAGE_TOKEN, token);
+  localStorage.setItem(STORAGE_USER, JSON.stringify(user));
+}
+
+
+function clearSession() {
+  sessionToken = null;
+  currentUser = null;
+
+  localStorage.removeItem(STORAGE_TOKEN);
+  localStorage.removeItem(STORAGE_USER);
+}
+
+
+/* =========================================================
+   API CORE
+   ========================================================= */
+
+async function apiRequest(action, data = {}) {
+
+  const payload = {
+    action: action,
+    ...data
+  };
+
+  if (sessionToken) {
+    payload.token = sessionToken;
+  }
+
+  console.log("QMS API REQUEST:", payload);
+
+  try {
+
+    const response = await fetch(API_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "text/plain;charset=utf-8"
+      },
+      body: JSON.stringify(payload)
+    });
+
+    const raw = await response.text();
+
+    console.log("QMS API HTTP STATUS:", response.status);
+    console.log("QMS API RAW RESPONSE:", raw);
+
+    let result;
+
+    try {
+      result = JSON.parse(raw);
+    } catch (parseError) {
+      console.error("JSON PARSE ERROR:", parseError);
+
+      return {
+        success: false,
+        error: "INVALID_API_RESPONSE",
+        raw: raw
+      };
+    }
+
+    console.log("QMS API RESPONSE:", result);
+
+    if (
+      result &&
+      (
+        result.error === "SESSION_EXPIRED" ||
+        result.error === "INVALID_SESSION" ||
+        result.error === "UNAUTHORIZED"
+      )
+    ) {
+      handleSessionExpired();
+      return result;
+    }
+
+    return result;
+
+  } catch (error) {
+
+    console.error("QMS API NETWORK ERROR:", error);
+
+    return {
+      success: false,
+      error: "NETWORK_ERROR",
+      message: error.message
+    };
+  }
+}
+
+
+/* =========================================================
    LOGIN
-   ===================================================== */
+   ========================================================= */
 
-async function handleLogin(event) {
+function setupLoginForm() {
+
+  const form = document.getElementById("loginForm");
+
+  if (!form) return;
+
+  form.addEventListener("submit", async function (event) {
 
     event.preventDefault();
 
-    clearLoginError();
+    const usernameElement =
+      document.getElementById("username");
 
+    const passwordElement =
+      document.getElementById("password");
 
     const username =
-        DOM.username.value.trim();
+      usernameElement
+        ? usernameElement.value.trim()
+        : "";
 
     const password =
-        DOM.password.value;
+      passwordElement
+        ? passwordElement.value
+        : "";
 
-
-    if (!username) {
-
-        showLoginError(
-            "Please enter your username."
-        );
-
-        return;
-
+    if (!username || !password) {
+      showMessage(
+        "Please enter username and password.",
+        "error"
+      );
+      return;
     }
-
-
-    if (!password) {
-
-        showLoginError(
-            "Please enter your password."
-        );
-
-        return;
-
-    }
-
 
     setLoginLoading(true);
 
+    const result = await apiRequest("LOGIN", {
+      username: username,
+      password: password
+    });
 
-    try {
+    console.log("LOGIN RESULT:", result);
 
-        const response =
-            await apiRequest({
+    setLoginLoading(false);
 
-                action:
-                    "LOGIN",
+    if (!result || !result.success) {
 
-                username:
-                    username,
+      showMessage(
+        getFriendlyError(result),
+        "error"
+      );
 
-                password:
-                    password
-
-            });
-
-
-        if (!response.success) {
-
-            showLoginError(
-                getReadableError(
-                    response.error
-                )
-            );
-
-            return;
-
-        }
-
-
-        App.token =
-            response.token;
-
-        App.user =
-            response.user;
-
-
-        saveSession();
-
-        showApplication();
-
-        await loadDashboard();
-
-
-    } catch (error) {
-
-        console.error(
-            "QMS LOGIN ERROR:",
-            error
-        );
-
-
-        showLoginError(
-            "Unable to connect to the QMS server."
-        );
-
-    } finally {
-
-        setLoginLoading(false);
-
+      return;
     }
 
-}
+    if (!result.token || !result.user) {
 
+      showMessage(
+        "Login response is incomplete.",
+        "error"
+      );
 
-/* =====================================================
-   FORGOT PASSWORD
-   ===================================================== */
+      return;
+    }
 
-function openForgotPassword() {
-
-    DOM.forgotPasswordModal?.classList.add(
-        "show"
+    saveSession(
+      result.token,
+      result.user
     );
 
-    DOM.forgotPasswordModal?.setAttribute(
-        "aria-hidden",
-        "false"
+    showApp();
+
+    loadDashboard();
+
+    showMessage(
+      "Login successful.",
+      "success"
+    );
+  });
+}
+
+
+function setLoginLoading(loading) {
+
+  const button =
+    document.querySelector(
+      "#loginForm button[type='submit']"
     );
 
+  if (!button) return;
 
-    DOM.forgotStep1.style.display =
-        "block";
-
-    DOM.forgotStep2.style.display =
-        "none";
-
-
-    DOM.resetUsername.value =
-        DOM.username.value.trim();
-
-
-    DOM.resetCode.value = "";
-
-    DOM.newResetPassword.value = "";
-
-    DOM.confirmResetPassword.value = "";
-
-    DOM.resetMessage.innerHTML = "";
-
-
-    setTimeout(
-        () => {
-
-            DOM.resetUsername?.focus();
-
-        },
-        100
-    );
-
+  if (loading) {
+    button.disabled = true;
+    button.dataset.originalText =
+      button.textContent;
+    button.textContent = "Signing in...";
+  } else {
+    button.disabled = false;
+    button.textContent =
+      button.dataset.originalText || "Login";
+  }
 }
 
 
-function closeForgotPassword() {
-
-    DOM.forgotPasswordModal?.classList.remove(
-        "show"
-    );
-
-    DOM.forgotPasswordModal?.setAttribute(
-        "aria-hidden",
-        "true"
-    );
-
-}
-
-
-function backToResetUsername() {
-
-    DOM.forgotStep1.style.display =
-        "block";
-
-    DOM.forgotStep2.style.display =
-        "none";
-
-
-    DOM.resetCode.value = "";
-
-    DOM.newResetPassword.value = "";
-
-    DOM.confirmResetPassword.value = "";
-
-    DOM.resetMessage.innerHTML = "";
-
-
-    DOM.resetUsername.focus();
-
-}
-
-
-/* =====================================================
-   SEND RESET CODE
-   ===================================================== */
-
-async function sendResetCode() {
-
-    const username =
-        DOM.resetUsername.value.trim();
-
-
-    if (!username) {
-
-        showResetMessage(
-            "Please enter your username.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    DOM.sendResetCodeBtn.disabled =
-        true;
-
-    DOM.sendResetCodeBtn.textContent =
-        "Sending...";
-
-
-    try {
-
-        const response =
-            await apiRequest({
-
-                action:
-                    "FORGOT_PASSWORD",
-
-                username:
-                    username
-
-            });
-
-
-        if (!response.success) {
-
-            showResetMessage(
-                getReadableError(
-                    response.error
-                ),
-                "error"
-            );
-
-            return;
-
-        }
-
-
-        DOM.forgotStep1.style.display =
-            "none";
-
-        DOM.forgotStep2.style.display =
-            "block";
-
-
-        showResetMessage(
-            "A verification code has been sent to your registered recovery email.",
-            "success"
-        );
-
-
-        DOM.resetCode.focus();
-
-
-    } catch (error) {
-
-        console.error(
-            "FORGOT PASSWORD ERROR:",
-            error
-        );
-
-
-        showResetMessage(
-            "Unable to connect to the QMS server.",
-            "error"
-        );
-
-
-    } finally {
-
-        DOM.sendResetCodeBtn.disabled =
-            false;
-
-        DOM.sendResetCodeBtn.textContent =
-            "Send Reset Code";
-
-    }
-
-}
-
-
-/* =====================================================
-   RESET PASSWORD
-   ===================================================== */
-
-async function resetPassword() {
-
-    const username =
-        DOM.resetUsername.value.trim();
-
-    const code =
-        DOM.resetCode.value.trim();
-
-    const password =
-        DOM.newResetPassword.value;
-
-    const confirmPassword =
-        DOM.confirmResetPassword.value;
-
-
-    if (!username) {
-
-        showResetMessage(
-            "Username is required.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    if (!/^\d{6}$/.test(code)) {
-
-        showResetMessage(
-            "Enter the 6-digit verification code.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    if (!password) {
-
-        showResetMessage(
-            "Enter a new password.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    if (password.length < 8) {
-
-        showResetMessage(
-            "Password must contain at least 8 characters.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    if (password !== confirmPassword) {
-
-        showResetMessage(
-            "Passwords do not match.",
-            "error"
-        );
-
-        return;
-
-    }
-
-
-    DOM.resetPasswordBtn.disabled =
-        true;
-
-    DOM.resetPasswordBtn.textContent =
-        "Resetting...";
-
-
-    try {
-
-        const response =
-            await apiRequest({
-
-                action:
-                    "RESET_PASSWORD",
-
-                username:
-                    username,
-
-                code:
-                    code,
-
-                newPassword:
-                    password
-
-            });
-
-
-        if (!response.success) {
-
-            showResetMessage(
-                getReadableError(
-                    response.error
-                ),
-                "error"
-            );
-
-            return;
-
-        }
-
-
-        closeForgotPassword();
-
-
-        DOM.username.value =
-            username;
-
-        DOM.password.value =
-            "";
-
-
-        showLoginError("");
-
-
-        showToast(
-            "Password reset successfully. Please sign in.",
-            "success"
-        );
-
-
-        DOM.password.focus();
-
-
-    } catch (error) {
-
-        console.error(
-            "RESET PASSWORD ERROR:",
-            error
-        );
-
-
-        showResetMessage(
-            "Unable to connect to the QMS server.",
-            "error"
-        );
-
-
-    } finally {
-
-        DOM.resetPasswordBtn.disabled =
-            false;
-
-        DOM.resetPasswordBtn.textContent =
-            "Reset Password";
-
-    }
-
-}
-
-
-function showResetMessage(
-    message,
-    type
-) {
-
-    if (!DOM.resetMessage)
-        return;
-
-
-    const className =
-        type === "error"
-            ? "error-message"
-            : "success-message";
-
-
-    DOM.resetMessage.innerHTML =
-        `<div class="${className}">
-            ${escapeHtml(message)}
-        </div>`;
-
-}
-
-
-/* =====================================================
+/* =========================================================
    LOGOUT
-   ===================================================== */
+   ========================================================= */
 
-async function handleLogout() {
+function setupLogout() {
 
-    try {
+  const elements = document.querySelectorAll(
+    "#logoutBtn, [data-action='logout']"
+  );
 
-        if (App.token) {
+  elements.forEach(function (element) {
 
-            await apiRequest({
+    element.addEventListener(
+      "click",
+      logout
+    );
 
-                action:
-                    "LOGOUT",
-
-                token:
-                    App.token
-
-            });
-
-        }
-
-    } catch (error) {
-
-        console.warn(
-            "Logout API error:",
-            error
-        );
-
-    }
-
-
-    clearSession();
-
-    showLogin();
-
+  });
 }
 
 
-/* =====================================================
-   SESSION
-   ===================================================== */
+async function logout() {
 
-function saveSession() {
-
-    if (App.token) {
-
-        localStorage.setItem(
-            "GGL_QMS_TOKEN",
-            App.token
-        );
-
+  try {
+    if (sessionToken) {
+      await apiRequest("LOGOUT");
     }
+  } catch (error) {
+    console.warn("LOGOUT API ERROR:", error);
+  }
 
+  clearSession();
 
-    if (App.user) {
+  currentModule = null;
+  currentRecordId = null;
 
-        localStorage.setItem(
-            "GGL_QMS_USER",
-            JSON.stringify(
-                App.user
-            )
-        );
-
-    }
-
+  showLogin();
 }
 
 
-function restoreSession() {
+function handleSessionExpired() {
 
-    const token =
-        localStorage.getItem(
-            "GGL_QMS_TOKEN"
-        );
+  clearSession();
 
-    const user =
-        localStorage.getItem(
-            "GGL_QMS_USER"
-        );
+  showLogin();
 
-
-    if (!token || !user) {
-
-        showLogin();
-
-        return;
-
-    }
-
-
-    try {
-
-        App.token =
-            token;
-
-        App.user =
-            JSON.parse(user);
-
-
-        verifySession();
-
-
-    } catch (error) {
-
-        console.error(error);
-
-        clearSession();
-
-        showLogin();
-
-    }
-
+  showMessage(
+    "Your session has expired. Please login again.",
+    "error"
+  );
 }
 
 
-async function verifySession() {
+/* =========================================================
+   PAGE SWITCHING
+   ========================================================= */
 
-    try {
+function showApp() {
 
-        const response =
-            await apiRequest({
+  const loginPage =
+    document.getElementById("loginPage");
 
-                action:
-                    "ME",
+  const appPage =
+    document.getElementById("appPage");
 
-                token:
-                    App.token
+  if (loginPage) {
+    loginPage.style.display = "none";
+  }
 
-            });
+  if (appPage) {
+    appPage.style.display = "";
+  }
 
-
-        if (
-            !response.success ||
-            !response.user
-        ) {
-
-            clearSession();
-
-            showLogin();
-
-            return;
-
-        }
-
-
-        App.user =
-            response.user;
-
-
-        saveSession();
-
-        showApplication();
-
-        await loadDashboard();
-
-
-    } catch (error) {
-
-        console.error(
-            "SESSION ERROR:",
-            error
-        );
-
-        clearSession();
-
-        showLogin();
-
-    }
-
-}
-
-
-/* =====================================================
-   API REQUEST
-   ===================================================== */
-
-async function apiRequest(payload) {
-
-    console.log(
-        "QMS API REQUEST:",
-        payload.action
-    );
-
-
-    const response =
-        await fetch(
-            API_URL,
-            {
-
-                method:
-                    "POST",
-
-                headers: {
-
-                    "Content-Type":
-                        "text/plain;charset=utf-8"
-
-                },
-
-                body:
-                    JSON.stringify(
-                        payload
-                    )
-
-            }
-        );
-
-
-    const text =
-        await response.text();
-
-
-    console.log(
-        "QMS API HTTP:",
-        response.status
-    );
-
-
-    console.log(
-        "QMS API RESPONSE:",
-        text
-    );
-
-
-    if (!response.ok) {
-
-        throw new Error(
-            "HTTP_" +
-            response.status
-        );
-
-    }
-
-
-    try {
-
-        return JSON.parse(text);
-
-    } catch (error) {
-
-        throw new Error(
-            "INVALID_JSON_RESPONSE"
-        );
-
-    }
-
-}
-
-
-/* =====================================================
-   APPLICATION
-   ===================================================== */
-
-function showApplication() {
-
-    DOM.loginPage.classList.add(
-        "hidden"
-    );
-
-    DOM.application.classList.remove(
-        "hidden"
-    );
-
-    updateUserInterface();
-
+  updateUserInterface();
 }
 
 
 function showLogin() {
 
-    DOM.application.classList.add(
-        "hidden"
-    );
+  const loginPage =
+    document.getElementById("loginPage");
 
-    DOM.loginPage.classList.remove(
-        "hidden"
-    );
+  const appPage =
+    document.getElementById("appPage");
 
-    DOM.username.value = "";
+  if (loginPage) {
+    loginPage.style.display = "";
+  }
 
-    DOM.password.value = "";
-
-    clearLoginError();
-
+  if (appPage) {
+    appPage.style.display = "none";
+  }
 }
 
 
 function updateUserInterface() {
 
-    if (!App.user)
-        return;
+  if (!currentUser) return;
 
-
-    DOM.userName.textContent =
-        App.user.name ||
-        App.user.username ||
-        "User";
-
-
-    DOM.userRole.textContent =
-        App.user.role ||
-        "USER";
-
-
-    const role =
-        String(
-            App.user.role || ""
-        ).toUpperCase();
-
-
-    if (role === "ADMIN") {
-
-        DOM.adminNavigation
-            .classList.remove(
-                "hidden"
-            );
-
-    } else {
-
-        DOM.adminNavigation
-            .classList.add(
-                "hidden"
-            );
-
-    }
-
-}
-
-
-/* =====================================================
-   NAVIGATION
-   ===================================================== */
-
-async function navigate(page) {
-
-    App.currentPage =
-        page;
-
-
-    document
-        .querySelectorAll(
-            ".nav-item"
-        )
-        .forEach(button => {
-
-            button.classList.toggle(
-                "active",
-                button.dataset.page === page
-            );
-
-        });
-
-
-    const titles = {
-
-        dashboard:
-            "Dashboard",
-
-        capa:
-            "CAPA",
-
-        complaints:
-            "Complaints",
-
-        compliance:
-            "Compliance",
-
-        audits:
-            "Audits",
-
-        actions:
-            "Actions",
-
-        documents:
-            "Documents",
-
-        evidence:
-            "Evidence",
-
-        reports:
-            "Reports",
-
-        users:
-            "Users",
-
-        auditlog:
-            "Audit Log"
-
-    };
-
-
-    DOM.pageTitle.textContent =
-        titles[page] ||
-        "QMS";
-
-
-    DOM.sidebar?.classList.remove(
-        "mobile-open"
+  const nameElements =
+    document.querySelectorAll(
+      "[data-user-name], #userName, #profileName"
     );
 
-
-    switch (page) {
-
-        case "dashboard":
-
-            await loadDashboard();
-
-            break;
+  nameElements.forEach(function (element) {
+    element.textContent =
+      currentUser.name ||
+      currentUser.username ||
+      "User";
+  });
 
 
-        case "capa":
+  const roleElements =
+    document.querySelectorAll(
+      "[data-user-role], #userRole, #profileRole"
+    );
 
-            renderModulePlaceholder(
-                "CAPA",
-                "CAPA management will be connected next."
-            );
-
-            break;
-
-
-        case "complaints":
-
-            renderModulePlaceholder(
-                "Complaints",
-                "Complaint management will be connected next."
-            );
-
-            break;
+  roleElements.forEach(function (element) {
+    element.textContent =
+      currentUser.role || "USER";
+  });
 
 
-        case "compliance":
+  const departmentElements =
+    document.querySelectorAll(
+      "[data-user-department]"
+    );
 
-            renderModulePlaceholder(
-                "Compliance",
-                "Compliance register will be connected next."
-            );
-
-            break;
-
-
-        case "audits":
-
-            renderModulePlaceholder(
-                "Audits",
-                "Audit management will be connected next."
-            );
-
-            break;
+  departmentElements.forEach(function (element) {
+    element.textContent =
+      currentUser.department || "";
+  });
 
 
-        case "actions":
-
-            renderModulePlaceholder(
-                "Actions",
-                "Action management will be connected next."
-            );
-
-            break;
-
-
-        case "documents":
-
-            renderModulePlaceholder(
-                "Documents",
-                "Document management will be connected next."
-            );
-
-            break;
-
-
-        case "evidence":
-
-            renderModulePlaceholder(
-                "Evidence",
-                "Evidence management will be connected next."
-            );
-
-            break;
-
-
-        case "reports":
-
-            renderModulePlaceholder(
-                "Reports",
-                "Report generator will be connected next."
-            );
-
-            break;
-
-
-        case "users":
-
-            if (hasRole(["ADMIN"])) {
-
-                await loadUsers();
-
-            } else {
-
-                showAccessDenied();
-
-            }
-
-            break;
-
-
-        case "auditlog":
-
-            if (hasRole(["ADMIN"])) {
-
-                loadAuditLog();
-
-            } else {
-
-                showAccessDenied();
-
-            }
-
-            break;
-
-
-        default:
-
-            await loadDashboard();
-
-    }
-
+  applyRBAC();
 }
 
 
-/* =====================================================
+/* =========================================================
+   RBAC
+   ========================================================= */
+
+function isAdmin() {
+
+  return (
+    currentUser &&
+    String(currentUser.role || "")
+      .trim()
+      .toUpperCase() === "ADMIN"
+  );
+}
+
+
+function hasRole(roles) {
+
+  if (!currentUser) return false;
+
+  const role =
+    String(currentUser.role || "")
+      .trim()
+      .toUpperCase();
+
+  return roles
+    .map(function (r) {
+      return String(r).toUpperCase();
+    })
+    .includes(role);
+}
+
+
+function applyRBAC() {
+
+  document
+    .querySelectorAll("[data-admin-only]")
+    .forEach(function (element) {
+
+      element.style.display =
+        isAdmin() ? "" : "none";
+
+    });
+
+
+  document
+    .querySelectorAll("[data-user-only]")
+    .forEach(function (element) {
+
+      element.style.display =
+        !isAdmin() ? "" : "none";
+
+    });
+}
+
+
+/* =========================================================
+   NAVIGATION
+   ========================================================= */
+
+function setupNavigation() {
+
+  document
+    .querySelectorAll("[data-module]")
+    .forEach(function (element) {
+
+      element.addEventListener(
+        "click",
+        function () {
+
+          const module =
+            element.dataset.module;
+
+          openModule(module);
+
+        }
+      );
+
+    });
+}
+
+
+async function openModule(module) {
+
+  currentModule = module;
+
+  console.log(
+    "OPEN MODULE:",
+    module
+  );
+
+  if (module === "dashboard") {
+    await loadDashboard();
+    return;
+  }
+
+  if (module === "users") {
+
+    if (!isAdmin()) {
+      showMessage(
+        "Administrator access required.",
+        "error"
+      );
+      return;
+    }
+
+    await loadUsers();
+    return;
+  }
+
+  await loadModule(module);
+}
+
+
+/* =========================================================
    DASHBOARD
-   ===================================================== */
+   ========================================================= */
 
 async function loadDashboard() {
 
-    DOM.pageContent.innerHTML = `
+  const result =
+    await apiRequest("DASHBOARD");
 
-        <div class="empty-state">
+  if (!result || !result.success) {
 
-            <div class="empty-state-title">
-                Loading dashboard...
-            </div>
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
 
-        </div>
+    return;
+  }
 
-    `;
-
-
-    try {
-
-        const response =
-            await apiRequest({
-
-                action:
-                    "DASHBOARD",
-
-                token:
-                    App.token
-
-            });
-
-
-        if (!response.success) {
-
-            handleApiError(
-                response
-            );
-
-            return;
-
-        }
-
-
-        renderDashboard(
-            response
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "DASHBOARD ERROR:",
-            error
-        );
-
-
-        DOM.pageContent.innerHTML = `
-
-            <div class="empty-state">
-
-                <div class="empty-state-title">
-                    Dashboard unavailable
-                </div>
-
-                <div class="empty-state-text">
-                    Unable to retrieve QMS data.
-                </div>
-
-            </div>
-
-        `;
-
-    }
-
+  renderDashboard(result);
 }
 
 
 function renderDashboard(data) {
 
-    const capaTotal =
-        data.capa?.total || 0;
-
-    const complaintTotal =
-        data.complaints?.total || 0;
-
-    const complianceTotal =
-        data.compliance?.total || 0;
-
-    const auditTotal =
-        data.audits?.total || 0;
-
-    const overdueCapa =
-        data.overdueCapa || 0;
-
-    const overdueActions =
-        data.overdueActions || 0;
-
-
-    DOM.pageContent.innerHTML = `
-
-        <div class="toolbar">
-
-            <div>
-
-                <div class="panel-title">
-                    QMS Overview
-                </div>
-
-                <div class="panel-subtitle">
-                    Current quality and compliance position
-                </div>
-
-            </div>
-
-            <button
-                class="btn btn-primary"
-                onclick="navigate('capa')"
-            >
-                + New CAPA
-            </button>
-
-        </div>
-
-
-        <div class="kpi-grid">
-
-            ${kpiCard(
-                "CAPA",
-                capaTotal,
-                "Total CAPA records"
-            )}
-
-            ${kpiCard(
-                "COMPLAINTS",
-                complaintTotal,
-                "Total complaints"
-            )}
-
-            ${kpiCard(
-                "COMPLIANCE",
-                complianceTotal,
-                "Compliance requirements"
-            )}
-
-            ${kpiCard(
-                "AUDITS",
-                auditTotal,
-                "Audit records"
-            )}
-
-        </div>
-
-
-        <div class="content-grid">
-
-            <div class="panel">
-
-                <div class="panel-header">
-
-                    <div>
-
-                        <div class="panel-title">
-                            Attention Required
-                        </div>
-
-                        <div class="panel-subtitle">
-                            Items requiring follow-up
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                <div class="panel-body">
-
-                    <div class="kpi-grid">
-
-                        ${smallKpi(
-                            "Overdue CAPA",
-                            overdueCapa
-                        )}
-
-                        ${smallKpi(
-                            "Overdue Actions",
-                            overdueActions
-                        )}
-
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="panel">
-
-                <div class="panel-header">
-
-                    <div>
-
-                        <div class="panel-title">
-                            System Status
-                        </div>
-
-                        <div class="panel-subtitle">
-                            GGL QMS Control Center
-                        </div>
-
-                    </div>
-
-                </div>
-
-
-                <div class="panel-body">
-
-                    <div class="system-status">
-
-                        <div>
-
-                            <strong>
-                                API
-                            </strong>
-
-                            <span class="status status-closed">
-                                ONLINE
-                            </span>
-
-                        </div>
-
-
-                        <div>
-
-                            <strong>
-                                Session
-                            </strong>
-
-                            <span class="status status-closed">
-                                ACTIVE
-                            </span>
-
-                        </div>
-
-
-                        <div>
-
-                            <strong>
-                                User
-                            </strong>
-
-                            <span>
-                                ${escapeHtml(
-                                    App.user?.name ||
-                                    App.user?.username ||
-                                    ""
-                                )}
-                            </span>
-
-                        </div>
-
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
-
-        <div class="panel">
-
-            <div class="panel-header">
-
-                <div>
-
-                    <div class="panel-title">
-                        Quick Access
-                    </div>
-
-                    <div class="panel-subtitle">
-                        QMS modules
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="panel-body">
-
-                <div class="quick-grid">
-
-                    ${quickButton(
-                        "CAPA",
-                        "capa"
-                    )}
-
-                    ${quickButton(
-                        "Complaints",
-                        "complaints"
-                    )}
-
-                    ${quickButton(
-                        "Compliance",
-                        "compliance"
-                    )}
-
-                    ${quickButton(
-                        "Audits",
-                        "audits"
-                    )}
-
-                    ${quickButton(
-                        "Documents",
-                        "documents"
-                    )}
-
-                    ${quickButton(
-                        "Reports",
-                        "reports"
-                    )}
-
-                </div>
-
-            </div>
-
-        </div>
-
-    `;
-
+  console.log(
+    "DASHBOARD DATA:",
+    data
+  );
+
+  const stats =
+    data.stats ||
+    data.data ||
+    data;
+
+  setValue(
+    "statCapa",
+    stats.capa ??
+    stats.capaCount ??
+    stats.totalCAPA ??
+    0
+  );
+
+  setValue(
+    "statComplaints",
+    stats.complaints ??
+    stats.complaintCount ??
+    0
+  );
+
+  setValue(
+    "statCompliance",
+    stats.compliance ??
+    stats.complianceCount ??
+    0
+  );
+
+  setValue(
+    "statAudits",
+    stats.audits ??
+    stats.auditCount ??
+    0
+  );
+
+  setValue(
+    "statActions",
+    stats.actions ??
+    stats.actionCount ??
+    0
+  );
+
+  setValue(
+    "statDocuments",
+    stats.documents ??
+    stats.documentCount ??
+    0
+  );
+
+  setValue(
+    "statEvidence",
+    stats.evidence ??
+    stats.evidenceCount ??
+    0
+  );
+
+  setValue(
+    "statOverdue",
+    stats.overdue ??
+    stats.overdueCount ??
+    0
+  );
+
+  renderGenericDashboard(data);
 }
 
 
-function kpiCard(
-    label,
-    value,
-    description
-) {
-
-    return `
-
-        <div class="kpi-card">
-
-            <div class="kpi-label">
-                ${label}
-            </div>
-
-            <div class="kpi-value">
-                ${value}
-            </div>
-
-            <div class="kpi-description">
-                ${description}
-            </div>
-
-        </div>
-
-    `;
-
-}
-
-
-function smallKpi(
-    label,
-    value
-) {
-
-    return `
-
-        <div class="kpi-card">
-
-            <div class="kpi-label">
-                ${label}
-            </div>
-
-            <div class="kpi-value">
-                ${value}
-            </div>
-
-        </div>
-
-    `;
-
-}
-
-
-function quickButton(
-    label,
-    page
-) {
-
-    return `
-
-        <button
-            class="btn btn-secondary"
-            onclick="navigate('${page}')"
-        >
-            ${escapeHtml(label)}
-        </button>
-
-    `;
-
-}
-
-
-/* =====================================================
-   USERS
-   ===================================================== */
-
-async function loadUsers() {
-
-    DOM.pageContent.innerHTML = `
-
-        <div class="empty-state">
-
-            <div class="empty-state-title">
-                Loading users...
-            </div>
-
-        </div>
-
-    `;
-
-
-    try {
-
-        const response =
-            await apiRequest({
-
-                action:
-                    "ADMIN_USERS",
-
-                token:
-                    App.token
-
-            });
-
-
-        if (!response.success) {
-
-            handleApiError(
-                response
-            );
-
-            return;
-
-        }
-
-
-        renderUsers(
-            response.users || []
-        );
-
-
-    } catch (error) {
-
-        console.error(
-            "USERS ERROR:",
-            error
-        );
-
-        showAccessDenied();
-
-    }
-
-}
-
-
-function renderUsers(users) {
-
-    let rows = "";
-
-
-    users.forEach(user => {
-
-        const id =
-            user["User ID"] ||
-            user.userId ||
-            "";
-
-
-        rows += `
-
-            <tr>
-
-                <td>
-                    ${escapeHtml(id)}
-                </td>
-
-                <td>
-                    ${escapeHtml(
-                        user.Username ||
-                        user.username ||
-                        ""
-                    )}
-                </td>
-
-                <td>
-                    ${escapeHtml(
-                        user.Name ||
-                        user.name ||
-                        ""
-                    )}
-                </td>
-
-                <td>
-                    ${escapeHtml(
-                        user.Role ||
-                        user.role ||
-                        ""
-                    )}
-                </td>
-
-                <td>
-                    ${escapeHtml(
-                        user.Status ||
-                        user.status ||
-                        ""
-                    )}
-                </td>
-
-                <td>
-
-                    <button
-                        class="btn btn-secondary"
-                        onclick="editUser('${escapeJs(id)}')"
-                    >
-                        Edit
-                    </button>
-
-                </td>
-
-            </tr>
-
+function renderGenericDashboard(data) {
+
+  const container =
+    document.getElementById(
+      "dashboardContent"
+    );
+
+  if (!container) return;
+
+  const items =
+    data.overdue ||
+    data.recent ||
+    data.items;
+
+  if (!Array.isArray(items)) return;
+
+  if (!items.length) {
+
+    container.innerHTML =
+      "<p>No dashboard records available.</p>";
+
+    return;
+  }
+
+  container.innerHTML =
+    items
+      .slice(0, 10)
+      .map(function (item) {
+
+        return `
+          <div class="qms-dashboard-item">
+            <strong>${escapeHtml(
+              item.id ||
+              item.ID ||
+              item["Record ID"] ||
+              ""
+            )}</strong>
+
+            <span>${escapeHtml(
+              item.status ||
+              item.Status ||
+              ""
+            )}</span>
+          </div>
         `;
+
+      })
+      .join("");
+}
+
+
+/* =========================================================
+   MODULE LIST
+   ========================================================= */
+
+const MODULE_MAP = {
+
+  capa: "CAPA",
+  complaints: "COMPLAINTS",
+  compliance: "COMPLIANCE",
+  audits: "AUDITS",
+  actions: "ACTIONS",
+  documents: "DOCUMENTS",
+  evidence: "EVIDENCE",
+
+  CAPA: "CAPA",
+  COMPLAINTS: "COMPLAINTS",
+  COMPLIANCE: "COMPLIANCE",
+  AUDITS: "AUDITS",
+  ACTIONS: "ACTIONS",
+  DOCUMENTS: "DOCUMENTS",
+  EVIDENCE: "EVIDENCE"
+};
+
+
+async function loadModule(module) {
+
+  const backendModule =
+    MODULE_MAP[module] ||
+    String(module).toUpperCase();
+
+  const result =
+    await apiRequest("LIST", {
+      module: backendModule
+    });
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return;
+  }
+
+  renderModuleList(
+    backendModule,
+    result
+  );
+}
+
+
+function renderModuleList(module, result) {
+
+  const container =
+    document.getElementById(
+      "moduleContent"
+    ) ||
+    document.getElementById(
+      "content"
+    );
+
+  if (!container) {
+    console.log(
+      "MODULE RESULT:",
+      module,
+      result
+    );
+    return;
+  }
+
+  const rows =
+    result.rows ||
+    result.data ||
+    result.records ||
+    [];
+
+  if (!Array.isArray(rows) || !rows.length) {
+
+    container.innerHTML = `
+      <div class="qms-empty-state">
+        <h3>No records found</h3>
+        <p>${escapeHtml(module)}</p>
+      </div>
+    `;
+
+    return;
+  }
+
+  const headers =
+    Object.keys(rows[0]);
+
+  let html = `
+    <div class="qms-table-wrapper">
+      <table class="qms-table">
+        <thead>
+          <tr>
+  `;
+
+  headers.forEach(function (header) {
+
+    html += `
+      <th>${escapeHtml(header)}</th>
+    `;
+
+  });
+
+  html += `
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  rows.forEach(function (row) {
+
+    html += "<tr>";
+
+    headers.forEach(function (header) {
+
+      const value =
+        row[header] ?? "";
+
+      html += `
+        <td>
+          ${formatCell(value)}
+        </td>
+      `;
 
     });
 
+    html += "</tr>";
 
-    DOM.pageContent.innerHTML = `
+  });
 
-        <div class="toolbar">
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
 
-            <div>
-
-                <div class="panel-title">
-                    User Administration
-                </div>
-
-                <div class="panel-subtitle">
-                    Manage authorized QMS users
-                </div>
-
-            </div>
-
-
-            <button
-                class="btn btn-primary"
-                onclick="openAddUser()"
-            >
-                + Add User
-            </button>
-
-        </div>
-
-
-        <div class="panel">
-
-            <div class="table-container">
-
-                <table class="data-table">
-
-                    <thead>
-
-                        <tr>
-
-                            <th>User ID</th>
-                            <th>Username</th>
-                            <th>Name</th>
-                            <th>Role</th>
-                            <th>Status</th>
-                            <th>Action</th>
-
-                        </tr>
-
-                    </thead>
-
-
-                    <tbody>
-
-                        ${
-                            rows ||
-                            `
-                                <tr>
-                                    <td colspan="6">
-                                        No users found.
-                                    </td>
-                                </tr>
-                            `
-                        }
-
-                    </tbody>
-
-                </table>
-
-            </div>
-
-        </div>
-
-    `;
-
+  container.innerHTML = html;
 }
 
 
-/* =====================================================
-   AUDIT LOG
-   ===================================================== */
+/* =========================================================
+   GET SINGLE RECORD
+   ========================================================= */
 
-function loadAuditLog() {
+async function getRecord(module, recordId) {
 
-    DOM.pageContent.innerHTML = `
+  const result =
+    await apiRequest("GET", {
+      module:
+        MODULE_MAP[module] ||
+        module,
+      id: recordId
+    });
 
-        <div class="panel">
+  if (!result || !result.success) {
 
-            <div class="panel-header">
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
 
-                <div>
+    return null;
+  }
 
-                    <div class="panel-title">
-                        Audit Log
-                    </div>
+  currentModule = module;
+  currentRecordId = recordId;
 
-                    <div class="panel-subtitle">
-                        System activity history
-                    </div>
-
-                </div>
-
-            </div>
-
-
-            <div class="panel-body">
-
-                Audit log interface will be connected
-                after the core modules.
-
-            </div>
-
-        </div>
-
-    `;
-
+  return result;
 }
 
 
-/* =====================================================
-   PLACEHOLDER
-   ===================================================== */
+/* =========================================================
+   CREATE
+   ========================================================= */
 
-function renderModulePlaceholder(
-    title,
-    message
+async function createRecord(module, data) {
+
+  const result =
+    await apiRequest("CREATE", {
+      module:
+        MODULE_MAP[module] ||
+        module,
+      data: data
+    });
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return null;
+  }
+
+  showMessage(
+    "Record created successfully.",
+    "success"
+  );
+
+  return result;
+}
+
+
+/* =========================================================
+   UPDATE
+   ========================================================= */
+
+async function updateRecord(
+  module,
+  recordId,
+  data
 ) {
 
-    DOM.pageContent.innerHTML = `
+  const result =
+    await apiRequest("UPDATE", {
+      module:
+        MODULE_MAP[module] ||
+        module,
+      id: recordId,
+      data: data
+    });
 
-        <div class="panel">
+  if (!result || !result.success) {
 
-            <div class="panel-header">
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
 
-                <div>
+    return null;
+  }
 
-                    <div class="panel-title">
-                        ${escapeHtml(title)}
-                    </div>
+  showMessage(
+    "Record updated successfully.",
+    "success"
+  );
 
-                    <div class="panel-subtitle">
-                        QMS Control Center
-                    </div>
-
-                </div>
-
-            </div>
+  return result;
+}
 
 
-            <div class="panel-body">
+/* =========================================================
+   DELETE
+   ========================================================= */
 
-                <div class="empty-state">
+async function deleteRecord(
+  module,
+  recordId
+) {
 
-                    <div class="empty-state-title">
-                        ${escapeHtml(title)}
-                    </div>
+  if (!isAdmin()) {
 
-                    <div class="empty-state-text">
-                        ${escapeHtml(message)}
-                    </div>
+    showMessage(
+      "Administrator access required.",
+      "error"
+    );
 
-                </div>
+    return null;
+  }
 
-            </div>
+  if (
+    !window.confirm(
+      "Delete this record? This action cannot be undone."
+    )
+  ) {
+    return null;
+  }
 
-        </div>
+  const result =
+    await apiRequest("DELETE", {
+      module:
+        MODULE_MAP[module] ||
+        module,
+      id: recordId
+    });
 
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return null;
+  }
+
+  showMessage(
+    "Record deleted successfully.",
+    "success"
+  );
+
+  return result;
+}
+
+
+/* =========================================================
+   USERS
+   ========================================================= */
+
+async function loadUsers() {
+
+  if (!isAdmin()) {
+
+    showMessage(
+      "Administrator access required.",
+      "error"
+    );
+
+    return;
+  }
+
+  const result =
+    await apiRequest("ADMIN_USERS");
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return;
+  }
+
+  renderUsers(result);
+}
+
+
+function renderUsers(result) {
+
+  const container =
+    document.getElementById(
+      "usersContent"
+    ) ||
+    document.getElementById(
+      "moduleContent"
+    );
+
+  if (!container) {
+    console.log(
+      "USERS:",
+      result
+    );
+    return;
+  }
+
+  const users =
+    result.users ||
+    result.data ||
+    result.rows ||
+    [];
+
+  if (!users.length) {
+
+    container.innerHTML =
+      "<p>No users found.</p>";
+
+    return;
+  }
+
+  const headers =
+    Object.keys(users[0]);
+
+  let html = `
+    <div class="qms-table-wrapper">
+      <table class="qms-table">
+        <thead>
+          <tr>
+  `;
+
+  headers.forEach(function (header) {
+
+    html += `
+      <th>${escapeHtml(header)}</th>
     `;
 
-}
+  });
 
+  html += `
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
 
-/* =====================================================
-   ACCESS CONTROL
-   ===================================================== */
+  users.forEach(function (user) {
 
-function hasRole(roles) {
+    html += "<tr>";
 
-    if (!App.user)
-        return false;
+    headers.forEach(function (header) {
 
+      html += `
+        <td>
+          ${formatCell(user[header])}
+        </td>
+      `;
 
-    const role =
-        String(
-            App.user.role || ""
-        ).toUpperCase();
+    });
 
+    const userId =
+      user["User ID"] ||
+      user.userId ||
+      "";
 
-    return roles.includes(
-        role
-    );
-
-}
-
-
-function showAccessDenied() {
-
-    DOM.pageContent.innerHTML = `
-
-        <div class="panel">
-
-            <div class="panel-body">
-
-                <div class="empty-state">
-
-                    <div class="empty-state-title">
-                        Access Denied
-                    </div>
-
-                    <div class="empty-state-text">
-                        Your account does not have permission
-                        to access this section.
-                    </div>
-
-                </div>
-
-            </div>
-
-        </div>
-
+    html += `
+      <td>
+        <button
+          type="button"
+          onclick="editUser('${escapeJs(userId)}')">
+          Edit
+        </button>
+      </td>
     `;
 
+    html += "</tr>";
+
+  });
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  container.innerHTML = html;
 }
 
 
-/* =====================================================
-   PASSWORD
-   ===================================================== */
+async function createUser(data) {
 
-function togglePassword() {
+  if (!isAdmin()) {
+    showMessage(
+      "Administrator access required.",
+      "error"
+    );
+    return;
+  }
 
-    if (
-        DOM.password.type ===
-        "password"
-    ) {
+  const result =
+    await apiRequest("CREATE_USER", {
+      data: data
+    });
 
-        DOM.password.type =
-            "text";
+  if (!result || !result.success) {
 
-        DOM.togglePassword.textContent =
-            "Hide";
-
-    } else {
-
-        DOM.password.type =
-            "password";
-
-        DOM.togglePassword.textContent =
-            "Show";
-
-    }
-
-}
-
-
-/* =====================================================
-   LOGIN UI
-   ===================================================== */
-
-function setLoginLoading(loading) {
-
-    DOM.loginButton.disabled =
-        loading;
-
-
-    if (loading) {
-
-        DOM.loginButtonText.classList.add(
-            "hidden"
-        );
-
-        DOM.loginLoader.classList.remove(
-            "hidden"
-        );
-
-    } else {
-
-        DOM.loginButtonText.classList.remove(
-            "hidden"
-        );
-
-        DOM.loginLoader.classList.add(
-            "hidden"
-        );
-
-    }
-
-}
-
-
-function showLoginError(message) {
-
-    DOM.loginError.textContent =
-        message;
-
-}
-
-
-function clearLoginError() {
-
-    DOM.loginError.textContent =
-        "";
-
-}
-
-
-/* =====================================================
-   SESSION
-   ===================================================== */
-
-function clearSession() {
-
-    App.token = null;
-
-    App.user = null;
-
-
-    localStorage.removeItem(
-        "GGL_QMS_TOKEN"
+    showMessage(
+      getFriendlyError(result),
+      "error"
     );
 
-    localStorage.removeItem(
-        "GGL_QMS_USER"
-    );
+    return;
+  }
 
+  showMessage(
+    "User created successfully.",
+    "success"
+  );
+
+  await loadUsers();
 }
 
 
-/* =====================================================
-   API ERROR
-   ===================================================== */
+async function updateUser(userId, data) {
 
-function handleApiError(response) {
+  if (!isAdmin()) {
+    showMessage(
+      "Administrator access required.",
+      "error"
+    );
+    return;
+  }
 
-    if (
-        response &&
-        (
-            response.error ===
-            "SESSION_EXPIRED" ||
+  const result =
+    await apiRequest("UPDATE_USER", {
+      userId: userId,
+      data: data
+    });
 
-            response.error ===
-            "AUTH_REQUIRED"
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return;
+  }
+
+  showMessage(
+    "User updated successfully.",
+    "success"
+  );
+
+  await loadUsers();
+}
+
+
+async function deleteUser(userId) {
+
+  if (!isAdmin()) {
+    showMessage(
+      "Administrator access required.",
+      "error"
+    );
+    return;
+  }
+
+  if (
+    !confirm(
+      "Disable/delete this user?"
+    )
+  ) {
+    return;
+  }
+
+  const result =
+    await apiRequest("DELETE_USER", {
+      userId: userId
+    });
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return;
+  }
+
+  showMessage(
+    "User action completed.",
+    "success"
+  );
+
+  await loadUsers();
+}
+
+
+/* =========================================================
+   FORGOT PASSWORD
+   ========================================================= */
+
+function setupForgotPassword() {
+
+  const forgotButton =
+    document.getElementById(
+      "forgotPasswordBtn"
+    );
+
+  if (forgotButton) {
+
+    forgotButton.addEventListener(
+      "click",
+      function (event) {
+
+        event.preventDefault();
+
+        openForgotPassword();
+
+      }
+    );
+  }
+
+
+  const requestForm =
+    document.getElementById(
+      "forgotPasswordForm"
+    );
+
+  if (requestForm) {
+
+    requestForm.addEventListener(
+      "submit",
+      async function (event) {
+
+        event.preventDefault();
+
+        const username =
+          document.getElementById(
+            "forgotUsername"
+          )?.value.trim();
+
+        if (!username) {
+          showMessage(
+            "Enter your username.",
+            "error"
+          );
+          return;
+        }
+
+        const result =
+          await apiRequest(
+            "FORGOT_PASSWORD",
+            {
+              username: username
+            }
+          );
+
+        if (!result || !result.success) {
+
+          showMessage(
+            getFriendlyError(result),
+            "error"
+          );
+
+          return;
+        }
+
+        showMessage(
+          "Password reset request processed.",
+          "success"
+        );
+
+      }
+    );
+  }
+
+
+  const resetForm =
+    document.getElementById(
+      "resetPasswordForm"
+    );
+
+  if (resetForm) {
+
+    resetForm.addEventListener(
+      "submit",
+      async function (event) {
+
+        event.preventDefault();
+
+        const username =
+          document.getElementById(
+            "resetUsername"
+          )?.value.trim();
+
+        const resetCode =
+          document.getElementById(
+            "resetCode"
+          )?.value.trim();
+
+        const newPassword =
+          document.getElementById(
+            "newPassword"
+          )?.value;
+
+        if (
+          !username ||
+          !resetCode ||
+          !newPassword
+        ) {
+
+          showMessage(
+            "Complete all reset fields.",
+            "error"
+          );
+
+          return;
+        }
+
+        const result =
+          await apiRequest(
+            "RESET_PASSWORD",
+            {
+              username: username,
+              resetCode: resetCode,
+              newPassword: newPassword
+            }
+          );
+
+        if (!result || !result.success) {
+
+          showMessage(
+            getFriendlyError(result),
+            "error"
+          );
+
+          return;
+        }
+
+        showMessage(
+          "Password reset successfully.",
+          "success"
+        );
+
+      }
+    );
+  }
+}
+
+
+function openForgotPassword() {
+
+  const modal =
+    document.getElementById(
+      "forgotPasswordModal"
+    );
+
+  if (modal) {
+    modal.style.display = "";
+  }
+}
+
+
+function closeForgotPassword() {
+
+  const modal =
+    document.getElementById(
+      "forgotPasswordModal"
+    );
+
+  if (modal) {
+    modal.style.display = "none";
+  }
+}
+
+
+/* =========================================================
+   FILE UPLOAD
+   ========================================================= */
+
+async function uploadFile(
+  module,
+  recordId,
+  file,
+  description = ""
+) {
+
+  if (!file) {
+
+    showMessage(
+      "Please select a file.",
+      "error"
+    );
+
+    return null;
+  }
+
+  const base64 =
+    await fileToBase64(file);
+
+  const result =
+    await apiRequest("UPLOAD", {
+      module:
+        MODULE_MAP[module] ||
+        module,
+
+      recordId: recordId,
+
+      fileName: file.name,
+
+      mimeType:
+        file.type ||
+        "application/octet-stream",
+
+      base64: base64,
+
+      description: description
+    });
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return null;
+  }
+
+  showMessage(
+    "File uploaded successfully.",
+    "success"
+  );
+
+  return result;
+}
+
+
+function fileToBase64(file) {
+
+  return new Promise(
+    function (resolve, reject) {
+
+      const reader =
+        new FileReader();
+
+      reader.onload = function () {
+
+        const result =
+          String(reader.result || "");
+
+        const commaIndex =
+          result.indexOf(",");
+
+        resolve(
+          commaIndex >= 0
+            ? result.substring(
+                commaIndex + 1
+              )
+            : result
+        );
+      };
+
+      reader.onerror = reject;
+
+      reader.readAsDataURL(file);
+    }
+  );
+}
+
+
+/* =========================================================
+   FILE ACCESS
+   ========================================================= */
+
+async function getFile(fileId) {
+
+  const result =
+    await apiRequest(
+      "GET_FILE",
+      {
+        fileId: fileId
+      }
+    );
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return null;
+  }
+
+  if (result.url) {
+    window.open(
+      result.url,
+      "_blank",
+      "noopener,noreferrer"
+    );
+  }
+
+  return result;
+}
+
+
+/* =========================================================
+   REPORTS
+   ========================================================= */
+
+async function generateReport(
+  reportId,
+  options = {}
+) {
+
+  const result =
+    await apiRequest("REPORT", {
+      reportId: reportId,
+      options: options
+    });
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return null;
+  }
+
+  renderReport(result);
+
+  return result;
+}
+
+
+function renderReport(result) {
+
+  console.log(
+    "REPORT RESULT:",
+    result
+  );
+
+  const container =
+    document.getElementById(
+      "reportContent"
+    );
+
+  if (!container) return;
+
+  const rows =
+    result.rows ||
+    result.data ||
+    result.records ||
+    [];
+
+  if (!Array.isArray(rows)) {
+
+    container.innerHTML =
+      `<pre>${escapeHtml(
+        JSON.stringify(
+          result,
+          null,
+          2
         )
-    ) {
+      )}</pre>`;
 
-        clearSession();
+    return;
+  }
 
-        showLogin();
+  if (!rows.length) {
 
-        showLoginError(
-            "Your session has expired. Please sign in again."
-        );
+    container.innerHTML =
+      "<p>No report data available.</p>";
 
-        return;
+    return;
+  }
 
-    }
+  const headers =
+    Object.keys(rows[0]);
 
+  let html = `
+    <div class="qms-table-wrapper">
+      <table class="qms-table">
+        <thead>
+          <tr>
+  `;
 
-    showToast(
-        getReadableError(
-            response?.error
-        ),
-        "error"
-    );
+  headers.forEach(function (header) {
 
+    html += `
+      <th>${escapeHtml(header)}</th>
+    `;
+
+  });
+
+  html += `
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  rows.forEach(function (row) {
+
+    html += "<tr>";
+
+    headers.forEach(function (header) {
+
+      html += `
+        <td>${formatCell(
+          row[header]
+        )}</td>
+      `;
+
+    });
+
+    html += "</tr>";
+
+  });
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  container.innerHTML = html;
 }
 
 
-function getReadableError(error) {
+/* =========================================================
+   AUDIT LOG
+   ========================================================= */
 
-    const errors = {
+async function loadAuditLog() {
 
-        INVALID_CREDENTIALS:
-            "Invalid username or password.",
+  if (!isAdmin()) {
 
-        USER_INACTIVE:
-            "This user account is inactive.",
-
-        USER_NOT_FOUND:
-            "User account was not found.",
-
-        SESSION_EXPIRED:
-            "Your session has expired.",
-
-        AUTH_REQUIRED:
-            "Authentication is required.",
-
-        ACCESS_DENIED:
-            "You do not have permission for this action.",
-
-        USERNAME_ALREADY_EXISTS:
-            "That username already exists.",
-
-        USERNAME_REQUIRED:
-            "Username is required.",
-
-        PASSWORD_REQUIRED:
-            "Password is required.",
-
-        PASSWORD_TOO_SHORT:
-            "Password must contain at least 8 characters.",
-
-        RESET_CODE_INVALID:
-            "The verification code is invalid.",
-
-        RESET_CODE_EXPIRED:
-            "The verification code has expired.",
-
-        RESET_CODE_USED:
-            "This verification code has already been used.",
-
-        RESET_CODE_TOO_MANY_ATTEMPTS:
-            "Too many verification attempts. Request a new code.",
-
-        EMAIL_NOT_CONFIGURED:
-            "No recovery email is configured for this account.",
-
-        RESET_FAILED:
-            "Password reset failed.",
-
-        NETWORK_ERROR:
-            "Network connection failed."
-
-    };
-
-
-    return (
-        errors[error] ||
-        error ||
-        "An unexpected error occurred."
+    showMessage(
+      "Administrator access required.",
+      "error"
     );
 
+    return;
+  }
+
+  const result =
+    await apiRequest(
+      "LIST",
+      {
+        module: "AUDIT_LOG"
+      }
+    );
+
+  if (!result || !result.success) {
+
+    showMessage(
+      getFriendlyError(result),
+      "error"
+    );
+
+    return;
+  }
+
+  renderModuleList(
+    "AUDIT_LOG",
+    result
+  );
 }
 
 
-/* =====================================================
-   TOAST
-   ===================================================== */
+/* =========================================================
+   LOOKUPS
+   ========================================================= */
 
-function showToast(
-    message,
-    type = "success"
+async function loadLookups(type = "") {
+
+  const result =
+    await apiRequest(
+      "LOOKUPS",
+      {
+        type: type
+      }
+    );
+
+  if (!result || !result.success) {
+
+    console.warn(
+      "LOOKUPS ERROR:",
+      result
+    );
+
+    return [];
+  }
+
+  return (
+    result.lookups ||
+    result.data ||
+    result.rows ||
+    []
+  );
+}
+
+
+/* =========================================================
+   SYSTEM INFO
+   ========================================================= */
+
+async function getSystemInfo() {
+
+  const result =
+    await apiRequest(
+      "SYSTEM_INFO"
+    );
+
+  console.log(
+    "SYSTEM INFO:",
+    result
+  );
+
+  return result;
+}
+
+
+/* =========================================================
+   UI HELPERS
+   ========================================================= */
+
+function setValue(id, value) {
+
+  const element =
+    document.getElementById(id);
+
+  if (element) {
+    element.textContent =
+      value === null ||
+      value === undefined
+        ? ""
+        : value;
+  }
+}
+
+
+function showMessage(
+  message,
+  type = "info"
 ) {
 
-    let container =
-        document.querySelector(
-            ".toast-container"
-        );
+  console.log(
+    `[${type}]`,
+    message
+  );
+
+  let container =
+    document.getElementById(
+      "toastContainer"
+    );
+
+  if (!container) {
+
+    container =
+      document.createElement("div");
+
+    container.id =
+      "toastContainer";
+
+    document.body.appendChild(
+      container
+    );
+  }
+
+  const toast =
+    document.createElement("div");
+
+  toast.className =
+    `qms-toast qms-toast-${type}`;
+
+  toast.textContent =
+    message;
+
+  container.appendChild(
+    toast
+  );
+
+  setTimeout(
+    function () {
+
+      toast.remove();
+
+    },
+    5000
+  );
+}
 
 
-    if (!container) {
+function getFriendlyError(result) {
 
-        container =
-            document.createElement(
-                "div"
-            );
+  if (!result) {
+    return "No response received from QMS API.";
+  }
 
-        container.className =
-            "toast-container";
+  switch (
+    String(
+      result.error || ""
+    ).toUpperCase()
+  ) {
 
-        document.body.appendChild(
-            container
-        );
+    case "INVALID_CREDENTIALS":
+      return "Invalid username or password.";
+
+    case "USER_INACTIVE":
+      return "Your account is inactive. Contact the administrator.";
+
+    case "SESSION_EXPIRED":
+      return "Your session has expired. Please login again.";
+
+    case "INVALID_SESSION":
+      return "Invalid session. Please login again.";
+
+    case "UNAUTHORIZED":
+      return "You are not authorized for this action.";
+
+    case "ADMIN_REQUIRED":
+      return "Administrator access required.";
+
+    case "USERNAME_AND_PASSWORD_REQUIRED":
+      return "Username and password are required.";
+
+    case "NETWORK_ERROR":
+      return "Unable to connect to the QMS API.";
+
+    case "INVALID_API_RESPONSE":
+      return "The QMS API returned an invalid response.";
+
+    default:
+      return (
+        result.message ||
+        result.error ||
+        "An unexpected error occurred."
+      );
+  }
+}
+
+
+/* =========================================================
+   FORM UTILITIES
+   ========================================================= */
+
+function formToObject(form) {
+
+  const data = {};
+
+  if (!form) return data;
+
+  const formData =
+    new FormData(form);
+
+  formData.forEach(
+    function (value, key) {
+
+      data[key] =
+        value;
 
     }
+  );
 
-
-    const toast =
-        document.createElement(
-            "div"
-        );
-
-
-    toast.className =
-        "toast " + type;
-
-
-    toast.textContent =
-        message;
-
-
-    container.appendChild(
-        toast
-    );
-
-
-    setTimeout(
-        () => {
-
-            toast.remove();
-
-        },
-        3500
-    );
-
+  return data;
 }
 
 
-/* =====================================================
-   USER FUNCTIONS
-   ===================================================== */
+function clearForm(form) {
 
-function openAddUser() {
+  if (!form) return;
 
-    showToast(
-        "User administration form will be connected next.",
-        "success"
-    );
-
+  if (
+    typeof form.reset ===
+    "function"
+  ) {
+    form.reset();
+  }
 }
 
 
-function editUser() {
-
-    showToast(
-        "User editing will be connected next.",
-        "success"
-    );
-
-}
-
-
-/* =====================================================
-   ESCAPING
-   ===================================================== */
+/* =========================================================
+   HTML SAFETY
+   ========================================================= */
 
 function escapeHtml(value) {
 
-    return String(
-        value ?? ""
-    )
-        .replace(
-            /&/g,
-            "&amp;"
-        )
-        .replace(
-            /</g,
-            "&lt;"
-        )
-        .replace(
-            />/g,
-            "&gt;"
-        )
-        .replace(
-            /"/g,
-            "&quot;"
-        )
-        .replace(
-            /'/g,
-            "&#039;"
-        );
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
 
+  return String(value)
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
 }
 
 
 function escapeJs(value) {
 
-    return String(
-        value ?? ""
-    )
-        .replace(
-            /\\/g,
-            "\\\\"
-        )
-        .replace(
-            /'/g,
-            "\\'"
-        )
-        .replace(
-            /"/g,
-            '\\"'
-        );
-
+  return String(
+    value ?? ""
+  )
+    .replaceAll("\\", "\\\\")
+    .replaceAll("'", "\\'")
+    .replaceAll('"', '\\"')
+    .replaceAll("\n", "\\n")
+    .replaceAll("\r", "\\r");
 }
 
 
-/* =====================================================
+function formatCell(value) {
+
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
+
+  if (
+    typeof value === "object"
+  ) {
+
+    return escapeHtml(
+      JSON.stringify(value)
+    );
+
+  }
+
+  const stringValue =
+    String(value);
+
+  if (
+    stringValue.startsWith(
+      "http://"
+    ) ||
+    stringValue.startsWith(
+      "https://"
+    )
+  ) {
+
+    return `
+      <a
+        href="${escapeHtml(
+          stringValue
+        )}"
+        target="_blank"
+        rel="noopener noreferrer">
+        Open
+      </a>
+    `;
+
+  }
+
+  return escapeHtml(
+    stringValue
+  );
+}
+
+
+/* =========================================================
+   GLOBAL FUNCTIONS
+   ========================================================= */
+
+window.openModule =
+  openModule;
+
+window.logout =
+  logout;
+
+window.closeForgotPassword =
+  closeForgotPassword;
+
+window.createRecord =
+  createRecord;
+
+window.updateRecord =
+  updateRecord;
+
+window.deleteRecord =
+  deleteRecord;
+
+window.getRecord =
+  getRecord;
+
+window.uploadFile =
+  uploadFile;
+
+window.getFile =
+  getFile;
+
+window.generateReport =
+  generateReport;
+
+window.loadUsers =
+  loadUsers;
+
+window.createUser =
+  createUser;
+
+window.updateUser =
+  updateUser;
+
+window.deleteUser =
+  deleteUser;
+
+window.editUser =
+  function (userId) {
+
+    console.log(
+      "EDIT USER:",
+      userId
+    );
+
+    showMessage(
+      "User editor can now be connected to the user form.",
+      "info"
+    );
+
+  };
+
+window.loadAuditLog =
+  loadAuditLog;
+
+window.loadLookups =
+  loadLookups;
+
+window.getSystemInfo =
+  getSystemInfo;
+
+
+/* =========================================================
    DEBUG
-   ===================================================== */
+   ========================================================= */
 
-window.QMS = {
+window.QMS_DEBUG =
+  {
+    api: API_URL,
 
-    App:
-        App,
+    getUser: function () {
+      return currentUser;
+    },
 
-    navigate:
-        navigate,
+    getToken: function () {
+      return sessionToken;
+    },
 
-    apiRequest:
-        apiRequest,
+    testAPI: async function () {
+      return await apiRequest(
+        "SYSTEM_INFO"
+      );
+    },
 
-    logout:
-        handleLogout,
+    dashboard: async function () {
+      return await apiRequest(
+        "DASHBOARD"
+      );
+    },
 
-    forgotPassword:
-        openForgotPassword
+    logout: logout
+  };
 
-};
+
+console.log(
+  "GGL QMS CONTROL CENTER JS LOADED"
+);
+console.log(
+  "API:",
+  API_URL
+);
