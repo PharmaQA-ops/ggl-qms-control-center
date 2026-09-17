@@ -1,54 +1,74 @@
 /* =========================================================
    GGL QMS CONTROL CENTER
    FINAL FRONTEND SCRIPT
-   API + AUTH + RBAC + DASHBOARD + CRUD + FILES + REPORTS
+   LOGIN + SESSION + RBAC + DASHBOARD + MODULES + CRUD
+   FILES + REPORTS + AUDIT LOG
    ========================================================= */
 
 const API_URL =
   "https://script.google.com/macros/s/AKfycbwnmtkqrVmggRbZnJserN_y5DwB4BPQ96oeCyoqbvXGBevmdGpqCh3TkVSDE8g6-2Kyrw/exec";
 
-
-/* =========================================================
-   GLOBAL STATE
-   ========================================================= */
-
 let currentUser = null;
 let sessionToken = null;
-let currentModule = null;
+let currentModule = "dashboard";
 let currentRecordId = null;
 
 const STORAGE_TOKEN = "GGL_QMS_TOKEN";
 const STORAGE_USER = "GGL_QMS_USER";
 
+const MODULE_MAP = {
+  dashboard: "DASHBOARD",
+  capa: "CAPA",
+  complaints: "COMPLAINTS",
+  compliance: "COMPLIANCE",
+  audits: "AUDITS",
+  actions: "ACTIONS",
+  documents: "DOCUMENTS",
+  evidence: "EVIDENCE",
+  reports: "REPORTS",
+  users: "USERS",
+  auditlog: "AUDIT_LOG"
+};
+
+const PAGE_TITLES = {
+  dashboard: "Dashboard",
+  capa: "CAPA Management",
+  complaints: "Complaints",
+  compliance: "Compliance",
+  audits: "Audits",
+  actions: "Actions",
+  documents: "Documents",
+  evidence: "Evidence",
+  reports: "Reports",
+  users: "User Administration",
+  auditlog: "Audit Log"
+};
 
 /* =========================================================
-   INITIALIZATION
+   INIT
    ========================================================= */
 
-document.addEventListener("DOMContentLoaded", function () {
+document.addEventListener("DOMContentLoaded", init);
+
+function init() {
   restoreSession();
-  initializeUI();
-});
-
-
-function initializeUI() {
   setupLoginForm();
   setupForgotPassword();
   setupNavigation();
   setupLogout();
-
-  const loginPage = document.getElementById("loginPage");
-  const appPage = document.getElementById("appPage");
+  setupPasswordToggle();
+  setupMobileMenu();
 
   if (sessionToken && currentUser) {
     showApp();
     loadDashboard();
   } else {
-    if (loginPage) loginPage.style.display = "";
-    if (appPage) appPage.style.display = "none";
+    showLogin();
   }
-}
 
+  console.log("GGL QMS CONTROL CENTER JS LOADED");
+  console.log("API:", API_URL);
+}
 
 /* =========================================================
    SESSION
@@ -56,18 +76,24 @@ function initializeUI() {
 
 function restoreSession() {
   try {
-    sessionToken = localStorage.getItem(STORAGE_TOKEN);
-    const savedUser = localStorage.getItem(STORAGE_USER);
+    const token = localStorage.getItem(STORAGE_TOKEN);
+    const user = localStorage.getItem(STORAGE_USER);
 
-    if (savedUser) {
-      currentUser = JSON.parse(savedUser);
+    if (token && user) {
+      const parsed = JSON.parse(user);
+
+      if (parsed && parsed.userId && parsed.username) {
+        sessionToken = token;
+        currentUser = parsed;
+      } else {
+        clearSession();
+      }
     }
   } catch (error) {
     console.error("SESSION RESTORE ERROR:", error);
     clearSession();
   }
 }
-
 
 function saveSession(token, user) {
   sessionToken = token;
@@ -77,35 +103,30 @@ function saveSession(token, user) {
   localStorage.setItem(STORAGE_USER, JSON.stringify(user));
 }
 
-
 function clearSession() {
   sessionToken = null;
   currentUser = null;
-
   localStorage.removeItem(STORAGE_TOKEN);
   localStorage.removeItem(STORAGE_USER);
 }
 
-
 /* =========================================================
-   API CORE
+   API
    ========================================================= */
 
 async function apiRequest(action, data = {}) {
-
   const payload = {
-    action: action,
+    action,
     ...data
   };
 
-  if (sessionToken) {
+  if (sessionToken && action !== "LOGIN") {
     payload.token = sessionToken;
   }
 
   console.log("QMS API REQUEST:", payload);
 
   try {
-
     const response = await fetch(API_URL, {
       method: "POST",
       headers: {
@@ -123,13 +144,12 @@ async function apiRequest(action, data = {}) {
 
     try {
       result = JSON.parse(raw);
-    } catch (parseError) {
-      console.error("JSON PARSE ERROR:", parseError);
-
+    } catch (error) {
+      console.error("JSON PARSE ERROR:", error);
       return {
         success: false,
         error: "INVALID_API_RESPONSE",
-        raw: raw
+        raw
       };
     }
 
@@ -137,20 +157,14 @@ async function apiRequest(action, data = {}) {
 
     if (
       result &&
-      (
-        result.error === "SESSION_EXPIRED" ||
-        result.error === "INVALID_SESSION" ||
-        result.error === "UNAUTHORIZED"
-      )
+      ["SESSION_EXPIRED", "INVALID_SESSION", "UNAUTHORIZED"]
+        .includes(String(result.error || "").toUpperCase())
     ) {
       handleSessionExpired();
-      return result;
     }
 
     return result;
-
   } catch (error) {
-
     console.error("QMS API NETWORK ERROR:", error);
 
     return {
@@ -161,583 +175,605 @@ async function apiRequest(action, data = {}) {
   }
 }
 
-
 /* =========================================================
    LOGIN
    ========================================================= */
 
 function setupLoginForm() {
-
   const form = document.getElementById("loginForm");
-
   if (!form) return;
 
-  form.addEventListener("submit", async function (event) {
-
+  form.addEventListener("submit", async event => {
     event.preventDefault();
 
-    const usernameElement =
-      document.getElementById("username");
+    const username = document.getElementById("username")?.value.trim() || "";
+    const password = document.getElementById("password")?.value || "";
 
-    const passwordElement =
-      document.getElementById("password");
-
-    const username =
-      usernameElement
-        ? usernameElement.value.trim()
-        : "";
-
-    const password =
-      passwordElement
-        ? passwordElement.value
-        : "";
+    clearLoginError();
 
     if (!username || !password) {
-      showMessage(
-        "Please enter username and password.",
-        "error"
-      );
+      showLoginError("Please enter username and password.");
       return;
     }
 
     setLoginLoading(true);
 
-    const result = await apiRequest("LOGIN", {
-      username: username,
-      password: password
-    });
+    try {
+      const result = await apiRequest("LOGIN", {
+        username,
+        password
+      });
 
-    console.log("LOGIN RESULT:", result);
+      console.log("LOGIN RESULT:", result);
 
-    setLoginLoading(false);
+      if (!result || !result.success) {
+        showLoginError(getFriendlyError(result));
+        return;
+      }
 
-    if (!result || !result.success) {
+      if (!result.token || !result.user) {
+        showLoginError("Login response is incomplete.");
+        return;
+      }
 
-      showMessage(
-        getFriendlyError(result),
-        "error"
-      );
+      saveSession(result.token, result.user);
 
-      return;
+      document.getElementById("password").value = "";
+
+      showApp();
+      await loadDashboard();
+
+      showMessage("Login successful.", "success");
+    } finally {
+      setLoginLoading(false);
     }
-
-    if (!result.token || !result.user) {
-
-      showMessage(
-        "Login response is incomplete.",
-        "error"
-      );
-
-      return;
-    }
-
-    saveSession(
-      result.token,
-      result.user
-    );
-
-    showApp();
-
-    loadDashboard();
-
-    showMessage(
-      "Login successful.",
-      "success"
-    );
   });
 }
 
-
 function setLoginLoading(loading) {
+  const button = document.getElementById("loginButton");
+  const text = document.getElementById("loginButtonText");
+  const loader = document.getElementById("loginLoader");
 
-  const button =
-    document.querySelector(
-      "#loginForm button[type='submit']"
-    );
+  if (button) button.disabled = loading;
+  if (text) text.textContent = loading ? "Signing in..." : "Sign In";
+  if (loader) loader.classList.toggle("hidden", !loading);
+}
 
-  if (!button) return;
+function showLoginError(message) {
+  const el = document.getElementById("loginError");
+  if (el) el.textContent = message || "";
+}
 
-  if (loading) {
-    button.disabled = true;
-    button.dataset.originalText =
-      button.textContent;
-    button.textContent = "Signing in...";
-  } else {
-    button.disabled = false;
-    button.textContent =
-      button.dataset.originalText || "Login";
+function clearLoginError() {
+  showLoginError("");
+}
+
+/* =========================================================
+   PASSWORD TOGGLE
+   ========================================================= */
+
+function setupPasswordToggle() {
+  const button = document.getElementById("togglePassword");
+  const input = document.getElementById("password");
+
+  if (!button || !input) return;
+
+  button.addEventListener("click", () => {
+    const visible = input.type === "text";
+    input.type = visible ? "password" : "text";
+    button.textContent = visible ? "Show" : "Hide";
+  });
+}
+
+/* =========================================================
+   APP / LOGIN VIEW
+   ========================================================= */
+
+function showApp() {
+  const login = document.getElementById("loginPage");
+  const application = document.getElementById("application");
+
+  if (login) login.style.display = "none";
+
+  if (application) {
+    application.classList.remove("hidden");
+    application.style.display = "";
+  }
+
+  updateUserInterface();
+}
+
+function showLogin() {
+  const login = document.getElementById("loginPage");
+  const application = document.getElementById("application");
+
+  if (application) {
+    application.classList.add("hidden");
+    application.style.display = "none";
+  }
+
+  if (login) {
+    login.style.display = "";
   }
 }
 
+function updateUserInterface() {
+  if (!currentUser) return;
+
+  setText("userName", currentUser.name || currentUser.username || "User");
+  setText("userRole", currentUser.role || "USER");
+
+  const adminNavigation = document.getElementById("adminNavigation");
+
+  if (adminNavigation) {
+    adminNavigation.classList.toggle("hidden", !isAdmin());
+    adminNavigation.style.display = isAdmin() ? "" : "none";
+  }
+
+  applyRBAC();
+}
+
+function applyRBAC() {
+  document.querySelectorAll("[data-admin-only]").forEach(element => {
+    element.style.display = isAdmin() ? "" : "none";
+  });
+
+  document.querySelectorAll("[data-user-only]").forEach(element => {
+    element.style.display = !isAdmin() ? "" : "none";
+  });
+}
 
 /* =========================================================
    LOGOUT
    ========================================================= */
 
 function setupLogout() {
+  const button = document.getElementById("logoutButton");
 
-  const elements = document.querySelectorAll(
-    "#logoutBtn, [data-action='logout']"
-  );
+  if (button) {
+    button.addEventListener("click", logout);
+  }
 
-  elements.forEach(function (element) {
-
-    element.addEventListener(
-      "click",
-      logout
-    );
-
+  document.querySelectorAll("[data-action='logout']").forEach(element => {
+    element.addEventListener("click", logout);
   });
 }
 
-
 async function logout() {
-
   try {
     if (sessionToken) {
       await apiRequest("LOGOUT");
     }
   } catch (error) {
-    console.warn("LOGOUT API ERROR:", error);
+    console.warn("LOGOUT ERROR:", error);
   }
 
   clearSession();
-
-  currentModule = null;
+  currentModule = "dashboard";
   currentRecordId = null;
-
   showLogin();
 }
 
+/* =========================================================
+   SESSION EXPIRED
+   ========================================================= */
 
 function handleSessionExpired() {
-
   clearSession();
-
   showLogin();
-
-  showMessage(
-    "Your session has expired. Please login again.",
-    "error"
-  );
+  showMessage("Your session has expired. Please login again.", "error");
 }
-
-
-/* =========================================================
-   PAGE SWITCHING
-   ========================================================= */
-
-function showApp() {
-
-  const loginPage =
-    document.getElementById("loginPage");
-
-  const appPage =
-    document.getElementById("appPage");
-
-  if (loginPage) {
-    loginPage.style.display = "none";
-  }
-
-  if (appPage) {
-    appPage.style.display = "";
-  }
-
-  updateUserInterface();
-}
-
-
-function showLogin() {
-
-  const loginPage =
-    document.getElementById("loginPage");
-
-  const appPage =
-    document.getElementById("appPage");
-
-  if (loginPage) {
-    loginPage.style.display = "";
-  }
-
-  if (appPage) {
-    appPage.style.display = "none";
-  }
-}
-
-
-function updateUserInterface() {
-
-  if (!currentUser) return;
-
-  const nameElements =
-    document.querySelectorAll(
-      "[data-user-name], #userName, #profileName"
-    );
-
-  nameElements.forEach(function (element) {
-    element.textContent =
-      currentUser.name ||
-      currentUser.username ||
-      "User";
-  });
-
-
-  const roleElements =
-    document.querySelectorAll(
-      "[data-user-role], #userRole, #profileRole"
-    );
-
-  roleElements.forEach(function (element) {
-    element.textContent =
-      currentUser.role || "USER";
-  });
-
-
-  const departmentElements =
-    document.querySelectorAll(
-      "[data-user-department]"
-    );
-
-  departmentElements.forEach(function (element) {
-    element.textContent =
-      currentUser.department || "";
-  });
-
-
-  applyRBAC();
-}
-
-
-/* =========================================================
-   RBAC
-   ========================================================= */
-
-function isAdmin() {
-
-  return (
-    currentUser &&
-    String(currentUser.role || "")
-      .trim()
-      .toUpperCase() === "ADMIN"
-  );
-}
-
-
-function hasRole(roles) {
-
-  if (!currentUser) return false;
-
-  const role =
-    String(currentUser.role || "")
-      .trim()
-      .toUpperCase();
-
-  return roles
-    .map(function (r) {
-      return String(r).toUpperCase();
-    })
-    .includes(role);
-}
-
-
-function applyRBAC() {
-
-  document
-    .querySelectorAll("[data-admin-only]")
-    .forEach(function (element) {
-
-      element.style.display =
-        isAdmin() ? "" : "none";
-
-    });
-
-
-  document
-    .querySelectorAll("[data-user-only]")
-    .forEach(function (element) {
-
-      element.style.display =
-        !isAdmin() ? "" : "none";
-
-    });
-}
-
 
 /* =========================================================
    NAVIGATION
    ========================================================= */
 
 function setupNavigation() {
-
-  document
-    .querySelectorAll("[data-module]")
-    .forEach(function (element) {
-
-      element.addEventListener(
-        "click",
-        function () {
-
-          const module =
-            element.dataset.module;
-
-          openModule(module);
-
-        }
-      );
-
+  document.querySelectorAll(".nav-item[data-page]").forEach(button => {
+    button.addEventListener("click", () => {
+      const page = button.dataset.page;
+      openModule(page);
     });
+  });
 }
 
+async function openModule(page) {
+  if (!currentUser) {
+    showLogin();
+    return;
+  }
 
-async function openModule(module) {
+  if (page === "users" && !isAdmin()) {
+    showMessage("Administrator access required.", "error");
+    return;
+  }
 
-  currentModule = module;
+  if (page === "auditlog" && !isAdmin()) {
+    showMessage("Administrator access required.", "error");
+    return;
+  }
 
-  console.log(
-    "OPEN MODULE:",
-    module
-  );
+  currentModule = page;
 
-  if (module === "dashboard") {
+  document.querySelectorAll(".nav-item[data-page]").forEach(button => {
+    button.classList.toggle("active", button.dataset.page === page);
+  });
+
+  setText("pageTitle", PAGE_TITLES[page] || page);
+
+  closeMobileMenu();
+
+  if (page === "dashboard") {
     await loadDashboard();
-    return;
-  }
-
-  if (module === "users") {
-
-    if (!isAdmin()) {
-      showMessage(
-        "Administrator access required.",
-        "error"
-      );
-      return;
-    }
-
+  } else if (page === "reports") {
+    await loadReportsPage();
+  } else if (page === "users") {
     await loadUsers();
-    return;
+  } else if (page === "auditlog") {
+    await loadAuditLog();
+  } else {
+    await loadModule(page);
   }
-
-  await loadModule(module);
 }
-
 
 /* =========================================================
    DASHBOARD
    ========================================================= */
 
 async function loadDashboard() {
+  const container = getPageContent();
 
-  const result =
-    await apiRequest("DASHBOARD");
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="qms-loading">
+      <div class="loader"></div>
+      <p>Loading QMS dashboard...</p>
+    </div>
+  `;
+
+  const result = await apiRequest("DASHBOARD");
+
+  console.log("DASHBOARD RESULT:", result);
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
+    container.innerHTML = `
+      <div class="qms-empty-state">
+        <h3>Dashboard unavailable</h3>
+        <p>${escapeHtml(getFriendlyError(result))}</p>
+        <button type="button" onclick="loadDashboard()">Retry</button>
+      </div>
+    `;
     return;
   }
 
   renderDashboard(result);
 }
 
-
 function renderDashboard(data) {
-
-  console.log(
-    "DASHBOARD DATA:",
-    data
-  );
-
-  const stats =
-    data.stats ||
-    data.data ||
-    data;
-
-  setValue(
-    "statCapa",
-    stats.capa ??
-    stats.capaCount ??
-    stats.totalCAPA ??
-    0
-  );
-
-  setValue(
-    "statComplaints",
-    stats.complaints ??
-    stats.complaintCount ??
-    0
-  );
-
-  setValue(
-    "statCompliance",
-    stats.compliance ??
-    stats.complianceCount ??
-    0
-  );
-
-  setValue(
-    "statAudits",
-    stats.audits ??
-    stats.auditCount ??
-    0
-  );
-
-  setValue(
-    "statActions",
-    stats.actions ??
-    stats.actionCount ??
-    0
-  );
-
-  setValue(
-    "statDocuments",
-    stats.documents ??
-    stats.documentCount ??
-    0
-  );
-
-  setValue(
-    "statEvidence",
-    stats.evidence ??
-    stats.evidenceCount ??
-    0
-  );
-
-  setValue(
-    "statOverdue",
-    stats.overdue ??
-    stats.overdueCount ??
-    0
-  );
-
-  renderGenericDashboard(data);
-}
-
-
-function renderGenericDashboard(data) {
-
-  const container =
-    document.getElementById(
-      "dashboardContent"
-    );
-
+  const container = getPageContent();
   if (!container) return;
 
-  const items =
-    data.overdue ||
-    data.recent ||
-    data.items;
+  const stats = data.stats || {};
 
-  if (!Array.isArray(items)) return;
+  container.innerHTML = `
+    <div class="qms-page-header">
+      <div>
+        <h1>QMS Control Center</h1>
+        <p>Quality management, CAPA, compliance, complaints and audit control.</p>
+      </div>
+      <div class="qms-status-badge">SYSTEM ONLINE</div>
+    </div>
 
-  if (!items.length) {
+    <div class="qms-stat-grid">
+      ${statCard("CAPA", stats.capa, "capa")}
+      ${statCard("Complaints", stats.complaints, "complaints")}
+      ${statCard("Compliance", stats.compliance, "compliance")}
+      ${statCard("Audits", stats.audits, "audits")}
+      ${statCard("Actions", stats.actions, "actions")}
+      ${statCard("Documents", stats.documents, "documents")}
+      ${statCard("Evidence", stats.evidence, "evidence")}
+      ${statCard("Overdue", stats.overdue, "overdue")}
+    </div>
 
-    container.innerHTML =
-      "<p>No dashboard records available.</p>";
-
-    return;
-  }
-
-  container.innerHTML =
-    items
-      .slice(0, 10)
-      .map(function (item) {
-
-        return `
-          <div class="qms-dashboard-item">
-            <strong>${escapeHtml(
-              item.id ||
-              item.ID ||
-              item["Record ID"] ||
-              ""
-            )}</strong>
-
-            <span>${escapeHtml(
-              item.status ||
-              item.Status ||
-              ""
-            )}</span>
+    <div class="qms-dashboard-grid">
+      <div class="qms-panel">
+        <div class="qms-panel-header">
+          <div>
+            <h3>QMS Modules</h3>
+            <p>Open a module to view and manage records.</p>
           </div>
-        `;
+        </div>
 
-      })
-      .join("");
+        <div class="qms-module-grid">
+          ${moduleCard("CAPA", "capa", "Corrective and preventive actions")}
+          ${moduleCard("Complaints", "complaints", "Customer complaints and investigations")}
+          ${moduleCard("Compliance", "compliance", "Requirements and compliance status")}
+          ${moduleCard("Audits", "audits", "Audit findings and closure")}
+          ${moduleCard("Actions", "actions", "Corrective and follow-up actions")}
+          ${moduleCard("Documents", "documents", "Controlled QMS documents")}
+          ${moduleCard("Evidence", "evidence", "Objective evidence and records")}
+          ${moduleCard("Reports", "reports", "Audit-ready management reports")}
+        </div>
+      </div>
+
+      <div class="qms-panel">
+        <div class="qms-panel-header">
+          <div>
+            <h3>System Information</h3>
+            <p>Current session and system state.</p>
+          </div>
+        </div>
+
+        <div class="qms-info-list">
+          <div><span>User</span><strong>${escapeHtml(currentUser?.name || currentUser?.username || "")}</strong></div>
+          <div><span>Role</span><strong>${escapeHtml(currentUser?.role || "")}</strong></div>
+          <div><span>Department</span><strong>${escapeHtml(currentUser?.department || "")}</strong></div>
+          <div><span>Status</span><strong>ACTIVE</strong></div>
+        </div>
+      </div>
+    </div>
+  `;
 }
 
+function statCard(label, value, page) {
+  return `
+    <button type="button" class="qms-stat-card" onclick="openModule('${page}')">
+      <span>${escapeHtml(label)}</span>
+      <strong>${escapeHtml(value ?? 0)}</strong>
+    </button>
+  `;
+}
+
+function moduleCard(label, page, description) {
+  return `
+    <button type="button" class="qms-module-card" onclick="openModule('${page}')">
+      <strong>${escapeHtml(label)}</strong>
+      <span>${escapeHtml(description)}</span>
+    </button>
+  `;
+}
 
 /* =========================================================
-   MODULE LIST
+   MODULES
    ========================================================= */
 
-const MODULE_MAP = {
+async function loadModule(page) {
+  const container = getPageContent();
+  if (!container) return;
 
-  capa: "CAPA",
-  complaints: "COMPLAINTS",
-  compliance: "COMPLIANCE",
-  audits: "AUDITS",
-  actions: "ACTIONS",
-  documents: "DOCUMENTS",
-  evidence: "EVIDENCE",
+  const backendModule = MODULE_MAP[page] || String(page).toUpperCase();
 
-  CAPA: "CAPA",
-  COMPLAINTS: "COMPLAINTS",
-  COMPLIANCE: "COMPLIANCE",
-  AUDITS: "AUDITS",
-  ACTIONS: "ACTIONS",
-  DOCUMENTS: "DOCUMENTS",
-  EVIDENCE: "EVIDENCE"
-};
+  container.innerHTML = `
+    <div class="qms-loading">
+      <div class="loader"></div>
+      <p>Loading ${escapeHtml(PAGE_TITLES[page] || page)}...</p>
+    </div>
+  `;
 
+  const result = await apiRequest("LIST", {
+    module: backendModule
+  });
 
-async function loadModule(module) {
-
-  const backendModule =
-    MODULE_MAP[module] ||
-    String(module).toUpperCase();
-
-  const result =
-    await apiRequest("LIST", {
-      module: backendModule
-    });
+  console.log("MODULE RESULT:", backendModule, result);
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
+    container.innerHTML = `
+      <div class="qms-empty-state">
+        <h3>Unable to load module</h3>
+        <p>${escapeHtml(getFriendlyError(result))}</p>
+        <button type="button" onclick="openModule('${escapeJs(page)}')">Retry</button>
+      </div>
+    `;
     return;
   }
 
-  renderModuleList(
-    backendModule,
-    result
-  );
+  renderModuleList(backendModule, result);
 }
 
-
 function renderModuleList(module, result) {
+  const container = getPageContent();
+  if (!container) return;
 
-  const container =
-    document.getElementById(
-      "moduleContent"
-    ) ||
-    document.getElementById(
-      "content"
-    );
+  const rows =
+    result.rows ||
+    result.data ||
+    result.records ||
+    [];
 
-  if (!container) {
-    console.log(
-      "MODULE RESULT:",
-      module,
-      result
-    );
+  const normalizedRows = Array.isArray(rows)
+    ? rows
+    : [];
+
+  container.innerHTML = `
+    <div class="qms-page-header">
+      <div>
+        <h1>${escapeHtml(PAGE_TITLES[currentModule] || module)}</h1>
+        <p>${normalizedRows.length} record(s) available.</p>
+      </div>
+      <div>
+        <button type="button" class="qms-primary-button"
+          onclick="showMessage('Record creation form can be connected here.', 'info')">
+          + New Record
+        </button>
+      </div>
+    </div>
+
+    ${
+      normalizedRows.length
+        ? buildTable(normalizedRows)
+        : `
+          <div class="qms-empty-state">
+            <h3>No records found</h3>
+            <p>This module currently contains no records.</p>
+          </div>
+        `
+    }
+  `;
+}
+
+/* =========================================================
+   USERS
+   ========================================================= */
+
+async function loadUsers() {
+  if (!isAdmin()) {
+    showMessage("Administrator access required.", "error");
     return;
   }
+
+  const container = getPageContent();
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="qms-loading">
+      <div class="loader"></div>
+      <p>Loading users...</p>
+    </div>
+  `;
+
+  const result = await apiRequest("ADMIN_USERS");
+
+  if (!result || !result.success) {
+    container.innerHTML = `
+      <div class="qms-empty-state">
+        <h3>Unable to load users</h3>
+        <p>${escapeHtml(getFriendlyError(result))}</p>
+      </div>
+    `;
+    return;
+  }
+
+  renderUsers(result);
+}
+
+function renderUsers(result) {
+  const container = getPageContent();
+  if (!container) return;
+
+  const users =
+    result.users ||
+    result.data ||
+    result.rows ||
+    [];
+
+  const safeUsers = Array.isArray(users) ? users : [];
+
+  container.innerHTML = `
+    <div class="qms-page-header">
+      <div>
+        <h1>User Administration</h1>
+        <p>Manage QMS users, roles and access status.</p>
+      </div>
+      <button type="button" class="qms-primary-button"
+        onclick="showMessage('Use createUser(data) to create a user through the API.', 'info')">
+        + Add User
+      </button>
+    </div>
+
+    ${
+      safeUsers.length
+        ? buildTable(safeUsers, true)
+        : `<div class="qms-empty-state"><h3>No users found</h3></div>`
+    }
+  `;
+}
+
+/* =========================================================
+   AUDIT LOG
+   ========================================================= */
+
+async function loadAuditLog() {
+  if (!isAdmin()) {
+    showMessage("Administrator access required.", "error");
+    return;
+  }
+
+  const container = getPageContent();
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="qms-loading">
+      <div class="loader"></div>
+      <p>Loading audit log...</p>
+    </div>
+  `;
+
+  const result = await apiRequest("LIST", {
+    module: "AUDIT_LOG"
+  });
+
+  if (!result || !result.success) {
+    container.innerHTML = `
+      <div class="qms-empty-state">
+        <h3>Unable to load audit log</h3>
+        <p>${escapeHtml(getFriendlyError(result))}</p>
+      </div>
+    `;
+    return;
+  }
+
+  renderModuleList("AUDIT_LOG", result);
+}
+
+/* =========================================================
+   REPORTS
+   ========================================================= */
+
+async function loadReportsPage() {
+  const container = getPageContent();
+  if (!container) return;
+
+  container.innerHTML = `
+    <div class="qms-page-header">
+      <div>
+        <h1>Reports</h1>
+        <p>Generate audit-ready QMS reports.</p>
+      </div>
+    </div>
+
+    <div class="qms-report-grid">
+      ${reportCard("CAPA Management Report", "CAPA Management Report")}
+      ${reportCard("Complaint Report", "Complaint Report")}
+      ${reportCard("Compliance Status Report", "Compliance Status Report")}
+      ${reportCard("Audit Findings Report", "Audit Findings Report")}
+      ${reportCard("Overdue Actions Report", "Overdue Actions Report")}
+      ${reportCard("Evidence Index", "Evidence Index")}
+    </div>
+
+    <div id="reportContent" class="qms-report-content"></div>
+  `;
+}
+
+function reportCard(label, reportId) {
+  return `
+    <button type="button" class="qms-module-card"
+      onclick="generateReport('${escapeJs(reportId)}')">
+      <strong>${escapeHtml(label)}</strong>
+      <span>Generate report</span>
+    </button>
+  `;
+}
+
+async function generateReport(reportId, options = {}) {
+  const result = await apiRequest("REPORT", {
+    reportId,
+    options
+  });
+
+  if (!result || !result.success) {
+    showMessage(getFriendlyError(result), "error");
+    return null;
+  }
+
+  renderReport(result);
+  return result;
+}
+
+function renderReport(result) {
+  const container = document.getElementById("reportContent");
+  if (!container) return;
 
   const rows =
     result.rows ||
@@ -746,857 +782,415 @@ function renderModuleList(module, result) {
     [];
 
   if (!Array.isArray(rows) || !rows.length) {
-
     container.innerHTML = `
       <div class="qms-empty-state">
-        <h3>No records found</h3>
-        <p>${escapeHtml(module)}</p>
+        <h3>No report data available</h3>
       </div>
     `;
-
     return;
   }
 
-  const headers =
-    Object.keys(rows[0]);
-
-  let html = `
-    <div class="qms-table-wrapper">
-      <table class="qms-table">
-        <thead>
-          <tr>
-  `;
-
-  headers.forEach(function (header) {
-
-    html += `
-      <th>${escapeHtml(header)}</th>
-    `;
-
-  });
-
-  html += `
-          </tr>
-        </thead>
-        <tbody>
-  `;
-
-  rows.forEach(function (row) {
-
-    html += "<tr>";
-
-    headers.forEach(function (header) {
-
-      const value =
-        row[header] ?? "";
-
-      html += `
-        <td>
-          ${formatCell(value)}
-        </td>
-      `;
-
-    });
-
-    html += "</tr>";
-
-  });
-
-  html += `
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  container.innerHTML = html;
+  container.innerHTML = buildTable(rows);
 }
 
-
 /* =========================================================
-   GET SINGLE RECORD
+   CRUD
    ========================================================= */
 
 async function getRecord(module, recordId) {
-
-  const result =
-    await apiRequest("GET", {
-      module:
-        MODULE_MAP[module] ||
-        module,
-      id: recordId
-    });
+  const result = await apiRequest("GET", {
+    module: MODULE_MAP[module] || String(module).toUpperCase(),
+    id: recordId
+  });
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
+    showMessage(getFriendlyError(result), "error");
     return null;
   }
 
   currentModule = module;
   currentRecordId = recordId;
-
   return result;
 }
-
-
-/* =========================================================
-   CREATE
-   ========================================================= */
 
 async function createRecord(module, data) {
-
-  const result =
-    await apiRequest("CREATE", {
-      module:
-        MODULE_MAP[module] ||
-        module,
-      data: data
-    });
-
-  if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return null;
-  }
-
-  showMessage(
-    "Record created successfully.",
-    "success"
-  );
-
-  return result;
-}
-
-
-/* =========================================================
-   UPDATE
-   ========================================================= */
-
-async function updateRecord(
-  module,
-  recordId,
-  data
-) {
-
-  const result =
-    await apiRequest("UPDATE", {
-      module:
-        MODULE_MAP[module] ||
-        module,
-      id: recordId,
-      data: data
-    });
-
-  if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return null;
-  }
-
-  showMessage(
-    "Record updated successfully.",
-    "success"
-  );
-
-  return result;
-}
-
-
-/* =========================================================
-   DELETE
-   ========================================================= */
-
-async function deleteRecord(
-  module,
-  recordId
-) {
-
-  if (!isAdmin()) {
-
-    showMessage(
-      "Administrator access required.",
-      "error"
-    );
-
-    return null;
-  }
-
-  if (
-    !window.confirm(
-      "Delete this record? This action cannot be undone."
-    )
-  ) {
-    return null;
-  }
-
-  const result =
-    await apiRequest("DELETE", {
-      module:
-        MODULE_MAP[module] ||
-        module,
-      id: recordId
-    });
-
-  if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return null;
-  }
-
-  showMessage(
-    "Record deleted successfully.",
-    "success"
-  );
-
-  return result;
-}
-
-
-/* =========================================================
-   USERS
-   ========================================================= */
-
-async function loadUsers() {
-
-  if (!isAdmin()) {
-
-    showMessage(
-      "Administrator access required.",
-      "error"
-    );
-
-    return;
-  }
-
-  const result =
-    await apiRequest("ADMIN_USERS");
-
-  if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return;
-  }
-
-  renderUsers(result);
-}
-
-
-function renderUsers(result) {
-
-  const container =
-    document.getElementById(
-      "usersContent"
-    ) ||
-    document.getElementById(
-      "moduleContent"
-    );
-
-  if (!container) {
-    console.log(
-      "USERS:",
-      result
-    );
-    return;
-  }
-
-  const users =
-    result.users ||
-    result.data ||
-    result.rows ||
-    [];
-
-  if (!users.length) {
-
-    container.innerHTML =
-      "<p>No users found.</p>";
-
-    return;
-  }
-
-  const headers =
-    Object.keys(users[0]);
-
-  let html = `
-    <div class="qms-table-wrapper">
-      <table class="qms-table">
-        <thead>
-          <tr>
-  `;
-
-  headers.forEach(function (header) {
-
-    html += `
-      <th>${escapeHtml(header)}</th>
-    `;
-
+  const result = await apiRequest("CREATE", {
+    module: MODULE_MAP[module] || String(module).toUpperCase(),
+    data
   });
 
-  html += `
-            <th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-  `;
+  if (!result || !result.success) {
+    showMessage(getFriendlyError(result), "error");
+    return null;
+  }
 
-  users.forEach(function (user) {
-
-    html += "<tr>";
-
-    headers.forEach(function (header) {
-
-      html += `
-        <td>
-          ${formatCell(user[header])}
-        </td>
-      `;
-
-    });
-
-    const userId =
-      user["User ID"] ||
-      user.userId ||
-      "";
-
-    html += `
-      <td>
-        <button
-          type="button"
-          onclick="editUser('${escapeJs(userId)}')">
-          Edit
-        </button>
-      </td>
-    `;
-
-    html += "</tr>";
-
-  });
-
-  html += `
-        </tbody>
-      </table>
-    </div>
-  `;
-
-  container.innerHTML = html;
+  showMessage("Record created successfully.", "success");
+  return result;
 }
 
+async function updateRecord(module, recordId, data) {
+  const result = await apiRequest("UPDATE", {
+    module: MODULE_MAP[module] || String(module).toUpperCase(),
+    id: recordId,
+    data
+  });
+
+  if (!result || !result.success) {
+    showMessage(getFriendlyError(result), "error");
+    return null;
+  }
+
+  showMessage("Record updated successfully.", "success");
+  return result;
+}
+
+async function deleteRecord(module, recordId) {
+  if (!isAdmin()) {
+    showMessage("Administrator access required.", "error");
+    return null;
+  }
+
+  if (!confirm("Delete this record? This action cannot be undone.")) {
+    return null;
+  }
+
+  const result = await apiRequest("DELETE", {
+    module: MODULE_MAP[module] || String(module).toUpperCase(),
+    id: recordId
+  });
+
+  if (!result || !result.success) {
+    showMessage(getFriendlyError(result), "error");
+    return null;
+  }
+
+  showMessage("Record deleted successfully.", "success");
+  return result;
+}
+
+/* =========================================================
+   USER CRUD
+   ========================================================= */
 
 async function createUser(data) {
-
   if (!isAdmin()) {
-    showMessage(
-      "Administrator access required.",
-      "error"
-    );
-    return;
+    showMessage("Administrator access required.", "error");
+    return null;
   }
 
-  const result =
-    await apiRequest("CREATE_USER", {
-      data: data
-    });
+  const result = await apiRequest("CREATE_USER", { data });
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return;
+    showMessage(getFriendlyError(result), "error");
+    return null;
   }
 
-  showMessage(
-    "User created successfully.",
-    "success"
-  );
-
+  showMessage("User created successfully.", "success");
   await loadUsers();
+  return result;
 }
-
 
 async function updateUser(userId, data) {
-
   if (!isAdmin()) {
-    showMessage(
-      "Administrator access required.",
-      "error"
-    );
-    return;
+    showMessage("Administrator access required.", "error");
+    return null;
   }
 
-  const result =
-    await apiRequest("UPDATE_USER", {
-      userId: userId,
-      data: data
-    });
+  const result = await apiRequest("UPDATE_USER", {
+    userId,
+    data
+  });
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return;
+    showMessage(getFriendlyError(result), "error");
+    return null;
   }
 
-  showMessage(
-    "User updated successfully.",
-    "success"
-  );
-
+  showMessage("User updated successfully.", "success");
   await loadUsers();
+  return result;
 }
-
 
 async function deleteUser(userId) {
-
   if (!isAdmin()) {
-    showMessage(
-      "Administrator access required.",
-      "error"
-    );
-    return;
+    showMessage("Administrator access required.", "error");
+    return null;
   }
 
-  if (
-    !confirm(
-      "Disable/delete this user?"
-    )
-  ) {
-    return;
-  }
+  if (!confirm("Disable/delete this user?")) return null;
 
-  const result =
-    await apiRequest("DELETE_USER", {
-      userId: userId
-    });
+  const result = await apiRequest("DELETE_USER", {
+    userId
+  });
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return;
+    showMessage(getFriendlyError(result), "error");
+    return null;
   }
 
-  showMessage(
-    "User action completed.",
-    "success"
-  );
-
+  showMessage("User action completed.", "success");
   await loadUsers();
+  return result;
 }
 
+function editUser(userId) {
+  showMessage(
+    "User editor is ready to be connected to the user form.",
+    "info"
+  );
+  console.log("EDIT USER:", userId);
+}
 
 /* =========================================================
    FORGOT PASSWORD
    ========================================================= */
 
 function setupForgotPassword() {
+  const forgotButton = document.getElementById("forgotPasswordBtn");
+  const closeButton = document.getElementById("closeForgotPasswordBtn");
+  const backButton = document.getElementById("backToResetUsernameBtn");
 
-  const forgotButton =
-    document.getElementById(
-      "forgotPasswordBtn"
-    );
+  const requestForm = document.getElementById("resetRequestForm");
+  const resetForm = document.getElementById("resetPasswordForm");
 
   if (forgotButton) {
-
-    forgotButton.addEventListener(
-      "click",
-      function (event) {
-
-        event.preventDefault();
-
-        openForgotPassword();
-
-      }
-    );
+    forgotButton.addEventListener("click", event => {
+      event.preventDefault();
+      openForgotPassword();
+    });
   }
 
+  if (closeButton) {
+    closeButton.addEventListener("click", closeForgotPassword);
+  }
 
-  const requestForm =
-    document.getElementById(
-      "forgotPasswordForm"
-    );
+  if (backButton) {
+    backButton.addEventListener("click", () => {
+      setForgotStep(1);
+    });
+  }
 
   if (requestForm) {
+    requestForm.addEventListener("submit", async event => {
+      event.preventDefault();
 
-    requestForm.addEventListener(
-      "submit",
-      async function (event) {
+      const username =
+        document.getElementById("resetUsername")?.value.trim() || "";
 
-        event.preventDefault();
-
-        const username =
-          document.getElementById(
-            "forgotUsername"
-          )?.value.trim();
-
-        if (!username) {
-          showMessage(
-            "Enter your username.",
-            "error"
-          );
-          return;
-        }
-
-        const result =
-          await apiRequest(
-            "FORGOT_PASSWORD",
-            {
-              username: username
-            }
-          );
-
-        if (!result || !result.success) {
-
-          showMessage(
-            getFriendlyError(result),
-            "error"
-          );
-
-          return;
-        }
-
-        showMessage(
-          "Password reset request processed.",
-          "success"
-        );
-
+      if (!username) {
+        setResetMessage("Enter your username.", "error");
+        return;
       }
-    );
+
+      const result = await apiRequest("FORGOT_PASSWORD", {
+        username
+      });
+
+      if (!result || !result.success) {
+        setResetMessage(getFriendlyError(result), "error");
+        return;
+      }
+
+      setResetMessage(
+        result.message ||
+          "If the account is eligible, password reset instructions have been processed.",
+        "success"
+      );
+
+      setForgotStep(2);
+    });
   }
-
-
-  const resetForm =
-    document.getElementById(
-      "resetPasswordForm"
-    );
 
   if (resetForm) {
+    resetForm.addEventListener("submit", async event => {
+      event.preventDefault();
 
-    resetForm.addEventListener(
-      "submit",
-      async function (event) {
+      const username =
+        document.getElementById("resetUsername")?.value.trim() || "";
 
-        event.preventDefault();
+      const resetCode =
+        document.getElementById("resetCode")?.value.trim() || "";
 
-        const username =
-          document.getElementById(
-            "resetUsername"
-          )?.value.trim();
+      const newPassword =
+        document.getElementById("newResetPassword")?.value || "";
 
-        const resetCode =
-          document.getElementById(
-            "resetCode"
-          )?.value.trim();
+      const confirmPassword =
+        document.getElementById("confirmResetPassword")?.value || "";
 
-        const newPassword =
-          document.getElementById(
-            "newPassword"
-          )?.value;
-
-        if (
-          !username ||
-          !resetCode ||
-          !newPassword
-        ) {
-
-          showMessage(
-            "Complete all reset fields.",
-            "error"
-          );
-
-          return;
-        }
-
-        const result =
-          await apiRequest(
-            "RESET_PASSWORD",
-            {
-              username: username,
-              resetCode: resetCode,
-              newPassword: newPassword
-            }
-          );
-
-        if (!result || !result.success) {
-
-          showMessage(
-            getFriendlyError(result),
-            "error"
-          );
-
-          return;
-        }
-
-        showMessage(
-          "Password reset successfully.",
-          "success"
-        );
-
+      if (!username || !resetCode || !newPassword || !confirmPassword) {
+        setResetMessage("Complete all reset fields.", "error");
+        return;
       }
-    );
+
+      if (newPassword !== confirmPassword) {
+        setResetMessage("Passwords do not match.", "error");
+        return;
+      }
+
+      const result = await apiRequest("RESET_PASSWORD", {
+        username,
+        resetCode,
+        newPassword
+      });
+
+      if (!result || !result.success) {
+        setResetMessage(getFriendlyError(result), "error");
+        return;
+      }
+
+      setResetMessage(
+        result.message || "Password reset successfully.",
+        "success"
+      );
+    });
   }
 }
-
 
 function openForgotPassword() {
+  const modal = document.getElementById("forgotPasswordModal");
+  if (!modal) return;
 
-  const modal =
-    document.getElementById(
-      "forgotPasswordModal"
-    );
-
-  if (modal) {
-    modal.style.display = "";
-  }
+  modal.style.display = "";
+  modal.setAttribute("aria-hidden", "false");
+  setForgotStep(1);
+  setResetMessage("", "info");
 }
-
 
 function closeForgotPassword() {
+  const modal = document.getElementById("forgotPasswordModal");
+  if (!modal) return;
 
-  const modal =
-    document.getElementById(
-      "forgotPasswordModal"
-    );
-
-  if (modal) {
-    modal.style.display = "none";
-  }
+  modal.style.display = "none";
+  modal.setAttribute("aria-hidden", "true");
 }
 
+function setForgotStep(step) {
+  const step1 = document.getElementById("forgotStep1");
+  const step2 = document.getElementById("forgotStep2");
+
+  if (step1) step1.style.display = step === 1 ? "" : "none";
+  if (step2) step2.style.display = step === 2 ? "" : "none";
+}
+
+function setResetMessage(message, type) {
+  const element = document.getElementById("resetMessage");
+  if (!element) return;
+
+  element.textContent = message || "";
+  element.dataset.type = type || "info";
+}
 
 /* =========================================================
-   FILE UPLOAD
+   FILES
    ========================================================= */
 
-async function uploadFile(
-  module,
-  recordId,
-  file,
-  description = ""
-) {
-
+async function uploadFile(module, recordId, file, description = "") {
   if (!file) {
-
-    showMessage(
-      "Please select a file.",
-      "error"
-    );
-
+    showMessage("Please select a file.", "error");
     return null;
   }
 
-  const base64 =
-    await fileToBase64(file);
+  const base64 = await fileToBase64(file);
 
-  const result =
-    await apiRequest("UPLOAD", {
-      module:
-        MODULE_MAP[module] ||
-        module,
-
-      recordId: recordId,
-
-      fileName: file.name,
-
-      mimeType:
-        file.type ||
-        "application/octet-stream",
-
-      base64: base64,
-
-      description: description
-    });
+  const result = await apiRequest("UPLOAD", {
+    module: MODULE_MAP[module] || String(module).toUpperCase(),
+    recordId,
+    fileName: file.name,
+    mimeType: file.type || "application/octet-stream",
+    base64,
+    description
+  });
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
+    showMessage(getFriendlyError(result), "error");
     return null;
   }
 
-  showMessage(
-    "File uploaded successfully.",
-    "success"
-  );
-
+  showMessage("File uploaded successfully.", "success");
   return result;
 }
 
-
 function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
 
-  return new Promise(
-    function (resolve, reject) {
+    reader.onload = () => {
+      const result = String(reader.result || "");
+      const comma = result.indexOf(",");
+      resolve(comma >= 0 ? result.substring(comma + 1) : result);
+    };
 
-      const reader =
-        new FileReader();
-
-      reader.onload = function () {
-
-        const result =
-          String(reader.result || "");
-
-        const commaIndex =
-          result.indexOf(",");
-
-        resolve(
-          commaIndex >= 0
-            ? result.substring(
-                commaIndex + 1
-              )
-            : result
-        );
-      };
-
-      reader.onerror = reject;
-
-      reader.readAsDataURL(file);
-    }
-  );
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
 }
 
-
-/* =========================================================
-   FILE ACCESS
-   ========================================================= */
-
 async function getFile(fileId) {
-
-  const result =
-    await apiRequest(
-      "GET_FILE",
-      {
-        fileId: fileId
-      }
-    );
+  const result = await apiRequest("GET_FILE", {
+    fileId
+  });
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
+    showMessage(getFriendlyError(result), "error");
     return null;
   }
 
   if (result.url) {
-    window.open(
-      result.url,
-      "_blank",
-      "noopener,noreferrer"
-    );
+    window.open(result.url, "_blank", "noopener,noreferrer");
   }
 
   return result;
 }
-
 
 /* =========================================================
-   REPORTS
+   LOOKUPS / SYSTEM INFO
    ========================================================= */
 
-async function generateReport(
-  reportId,
-  options = {}
-) {
-
-  const result =
-    await apiRequest("REPORT", {
-      reportId: reportId,
-      options: options
-    });
+async function loadLookups(type = "") {
+  const result = await apiRequest("LOOKUPS", { type });
 
   if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return null;
+    console.warn("LOOKUPS ERROR:", result);
+    return [];
   }
 
-  renderReport(result);
+  return result.lookups || result.data || result.rows || [];
+}
 
+async function getSystemInfo() {
+  const result = await apiRequest("SYSTEM_INFO");
+  console.log("SYSTEM INFO:", result);
   return result;
 }
 
+/* =========================================================
+   MOBILE MENU
+   ========================================================= */
 
-function renderReport(result) {
+function setupMobileMenu() {
+  const button = document.getElementById("mobileMenu");
+  const sidebar = document.getElementById("sidebar");
 
-  console.log(
-    "REPORT RESULT:",
-    result
-  );
+  if (!button || !sidebar) return;
 
-  const container =
-    document.getElementById(
-      "reportContent"
-    );
+  button.addEventListener("click", () => {
+    sidebar.classList.toggle("mobile-open");
+  });
+}
 
-  if (!container) return;
+function closeMobileMenu() {
+  const sidebar = document.getElementById("sidebar");
+  if (sidebar) sidebar.classList.remove("mobile-open");
+}
 
-  const rows =
-    result.rows ||
-    result.data ||
-    result.records ||
-    [];
+/* =========================================================
+   TABLE RENDERING
+   ========================================================= */
 
-  if (!Array.isArray(rows)) {
+function buildTable(rows, userTable = false) {
+  if (!Array.isArray(rows) || !rows.length) return "";
 
-    container.innerHTML =
-      `<pre>${escapeHtml(
-        JSON.stringify(
-          result,
-          null,
-          2
-        )
-      )}</pre>`;
-
-    return;
-  }
-
-  if (!rows.length) {
-
-    container.innerHTML =
-      "<p>No report data available.</p>";
-
-    return;
-  }
-
-  const headers =
-    Object.keys(rows[0]);
+  const headers = Object.keys(rows[0]);
 
   let html = `
     <div class="qms-table-wrapper">
@@ -1605,13 +1199,11 @@ function renderReport(result) {
           <tr>
   `;
 
-  headers.forEach(function (header) {
-
-    html += `
-      <th>${escapeHtml(header)}</th>
-    `;
-
+  headers.forEach(header => {
+    html += `<th>${escapeHtml(header)}</th>`;
   });
+
+  if (userTable) html += "<th>Actions</th>";
 
   html += `
           </tr>
@@ -1619,22 +1211,30 @@ function renderReport(result) {
         <tbody>
   `;
 
-  rows.forEach(function (row) {
-
+  rows.forEach(row => {
     html += "<tr>";
 
-    headers.forEach(function (header) {
-
-      html += `
-        <td>${formatCell(
-          row[header]
-        )}</td>
-      `;
-
+    headers.forEach(header => {
+      html += `<td>${formatCell(row[header])}</td>`;
     });
 
-    html += "</tr>";
+    if (userTable) {
+      const userId = row["User ID"] || row.userId || "";
+      html += `
+        <td>
+          <button type="button"
+            onclick="editUser('${escapeJs(userId)}')">
+            Edit
+          </button>
+          <button type="button"
+            onclick="deleteUser('${escapeJs(userId)}')">
+            Disable
+          </button>
+        </td>
+      `;
+    }
 
+    html += "</tr>";
   });
 
   html += `
@@ -1643,275 +1243,76 @@ function renderReport(result) {
     </div>
   `;
 
-  container.innerHTML = html;
+  return html;
 }
 
-
 /* =========================================================
-   AUDIT LOG
+   HELPERS
    ========================================================= */
 
-async function loadAuditLog() {
+function getPageContent() {
+  return document.getElementById("pageContent");
+}
 
-  if (!isAdmin()) {
+function setText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value ?? "";
+}
 
-    showMessage(
-      "Administrator access required.",
-      "error"
-    );
-
-    return;
-  }
-
-  const result =
-    await apiRequest(
-      "LIST",
-      {
-        module: "AUDIT_LOG"
-      }
-    );
-
-  if (!result || !result.success) {
-
-    showMessage(
-      getFriendlyError(result),
-      "error"
-    );
-
-    return;
-  }
-
-  renderModuleList(
-    "AUDIT_LOG",
-    result
+function isAdmin() {
+  return !!(
+    currentUser &&
+    String(currentUser.role || "").trim().toUpperCase() === "ADMIN"
   );
 }
 
+function showMessage(message, type = "info") {
+  console.log(`[${type}]`, message);
 
-/* =========================================================
-   LOOKUPS
-   ========================================================= */
-
-async function loadLookups(type = "") {
-
-  const result =
-    await apiRequest(
-      "LOOKUPS",
-      {
-        type: type
-      }
-    );
-
-  if (!result || !result.success) {
-
-    console.warn(
-      "LOOKUPS ERROR:",
-      result
-    );
-
-    return [];
-  }
-
-  return (
-    result.lookups ||
-    result.data ||
-    result.rows ||
-    []
-  );
-}
-
-
-/* =========================================================
-   SYSTEM INFO
-   ========================================================= */
-
-async function getSystemInfo() {
-
-  const result =
-    await apiRequest(
-      "SYSTEM_INFO"
-    );
-
-  console.log(
-    "SYSTEM INFO:",
-    result
-  );
-
-  return result;
-}
-
-
-/* =========================================================
-   UI HELPERS
-   ========================================================= */
-
-function setValue(id, value) {
-
-  const element =
-    document.getElementById(id);
-
-  if (element) {
-    element.textContent =
-      value === null ||
-      value === undefined
-        ? ""
-        : value;
-  }
-}
-
-
-function showMessage(
-  message,
-  type = "info"
-) {
-
-  console.log(
-    `[${type}]`,
-    message
-  );
-
-  let container =
-    document.getElementById(
-      "toastContainer"
-    );
+  let container = document.getElementById("toastContainer");
 
   if (!container) {
-
-    container =
-      document.createElement("div");
-
-    container.id =
-      "toastContainer";
-
-    document.body.appendChild(
-      container
-    );
+    container = document.createElement("div");
+    container.id = "toastContainer";
+    document.body.appendChild(container);
   }
 
-  const toast =
-    document.createElement("div");
+  const toast = document.createElement("div");
+  toast.className = `qms-toast qms-toast-${type}`;
+  toast.textContent = message || "";
 
-  toast.className =
-    `qms-toast qms-toast-${type}`;
+  container.appendChild(toast);
 
-  toast.textContent =
-    message;
-
-  container.appendChild(
-    toast
-  );
-
-  setTimeout(
-    function () {
-
-      toast.remove();
-
-    },
-    5000
-  );
+  setTimeout(() => toast.remove(), 5000);
 }
-
 
 function getFriendlyError(result) {
+  if (!result) return "No response received from QMS API.";
 
-  if (!result) {
-    return "No response received from QMS API.";
-  }
-
-  switch (
-    String(
-      result.error || ""
-    ).toUpperCase()
-  ) {
-
+  switch (String(result.error || "").toUpperCase()) {
     case "INVALID_CREDENTIALS":
       return "Invalid username or password.";
-
     case "USER_INACTIVE":
       return "Your account is inactive. Contact the administrator.";
-
     case "SESSION_EXPIRED":
       return "Your session has expired. Please login again.";
-
     case "INVALID_SESSION":
       return "Invalid session. Please login again.";
-
     case "UNAUTHORIZED":
       return "You are not authorized for this action.";
-
     case "ADMIN_REQUIRED":
       return "Administrator access required.";
-
-    case "USERNAME_AND_PASSWORD_REQUIRED":
-      return "Username and password are required.";
-
     case "NETWORK_ERROR":
       return "Unable to connect to the QMS API.";
-
     case "INVALID_API_RESPONSE":
       return "The QMS API returned an invalid response.";
-
     default:
-      return (
-        result.message ||
-        result.error ||
-        "An unexpected error occurred."
-      );
+      return result.message || result.error || "An unexpected error occurred.";
   }
 }
-
-
-/* =========================================================
-   FORM UTILITIES
-   ========================================================= */
-
-function formToObject(form) {
-
-  const data = {};
-
-  if (!form) return data;
-
-  const formData =
-    new FormData(form);
-
-  formData.forEach(
-    function (value, key) {
-
-      data[key] =
-        value;
-
-    }
-  );
-
-  return data;
-}
-
-
-function clearForm(form) {
-
-  if (!form) return;
-
-  if (
-    typeof form.reset ===
-    "function"
-  ) {
-    form.reset();
-  }
-}
-
-
-/* =========================================================
-   HTML SAFETY
-   ========================================================= */
 
 function escapeHtml(value) {
-
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return "";
-  }
+  if (value === null || value === undefined) return "";
 
   return String(value)
     .replaceAll("&", "&amp;")
@@ -1921,12 +1322,8 @@ function escapeHtml(value) {
     .replaceAll("'", "&#039;");
 }
 
-
 function escapeJs(value) {
-
-  return String(
-    value ?? ""
-  )
+  return String(value ?? "")
     .replaceAll("\\", "\\\\")
     .replaceAll("'", "\\'")
     .replaceAll('"', '\\"')
@@ -1934,164 +1331,92 @@ function escapeJs(value) {
     .replaceAll("\r", "\\r");
 }
 
-
 function formatCell(value) {
+  if (value === null || value === undefined) return "";
 
-  if (
-    value === null ||
-    value === undefined
-  ) {
-    return "";
+  if (typeof value === "object") {
+    return escapeHtml(JSON.stringify(value));
   }
 
-  if (
-    typeof value === "object"
-  ) {
+  const text = String(value);
 
-    return escapeHtml(
-      JSON.stringify(value)
-    );
-
-  }
-
-  const stringValue =
-    String(value);
-
-  if (
-    stringValue.startsWith(
-      "http://"
-    ) ||
-    stringValue.startsWith(
-      "https://"
-    )
-  ) {
-
+  if (/^https?:\/\//i.test(text)) {
     return `
-      <a
-        href="${escapeHtml(
-          stringValue
-        )}"
-        target="_blank"
-        rel="noopener noreferrer">
+      <a href="${escapeHtml(text)}"
+         target="_blank"
+         rel="noopener noreferrer">
         Open
       </a>
     `;
-
   }
 
-  return escapeHtml(
-    stringValue
-  );
+  return escapeHtml(text);
 }
 
+/* =========================================================
+   FORM UTILITIES
+   ========================================================= */
+
+function formToObject(form) {
+  const data = {};
+  if (!form) return data;
+
+  new FormData(form).forEach((value, key) => {
+    data[key] = value;
+  });
+
+  return data;
+}
+
+function clearForm(form) {
+  if (form && typeof form.reset === "function") {
+    form.reset();
+  }
+}
+
+/* =========================================================
+   DEBUG API
+   ========================================================= */
+
+window.QMS_DEBUG = {
+  api: API_URL,
+
+  getUser: () => currentUser,
+
+  getToken: () => sessionToken,
+
+  testAPI: () => apiRequest("SYSTEM_INFO"),
+
+  dashboard: () => apiRequest("DASHBOARD"),
+
+  clearSession: () => {
+    clearSession();
+    showLogin();
+  },
+
+  reloadDashboard: () => loadDashboard()
+};
 
 /* =========================================================
    GLOBAL FUNCTIONS
    ========================================================= */
 
-window.openModule =
-  openModule;
-
-window.logout =
-  logout;
-
-window.closeForgotPassword =
-  closeForgotPassword;
-
-window.createRecord =
-  createRecord;
-
-window.updateRecord =
-  updateRecord;
-
-window.deleteRecord =
-  deleteRecord;
-
-window.getRecord =
-  getRecord;
-
-window.uploadFile =
-  uploadFile;
-
-window.getFile =
-  getFile;
-
-window.generateReport =
-  generateReport;
-
-window.loadUsers =
-  loadUsers;
-
-window.createUser =
-  createUser;
-
-window.updateUser =
-  updateUser;
-
-window.deleteUser =
-  deleteUser;
-
-window.editUser =
-  function (userId) {
-
-    console.log(
-      "EDIT USER:",
-      userId
-    );
-
-    showMessage(
-      "User editor can now be connected to the user form.",
-      "info"
-    );
-
-  };
-
-window.loadAuditLog =
-  loadAuditLog;
-
-window.loadLookups =
-  loadLookups;
-
-window.getSystemInfo =
-  getSystemInfo;
-
-
-/* =========================================================
-   DEBUG
-   ========================================================= */
-
-window.QMS_DEBUG =
-  {
-    api: API_URL,
-
-    getUser: function () {
-      return currentUser;
-    },
-
-    getToken: function () {
-      return sessionToken;
-    },
-
-    testAPI: async function () {
-      return await apiRequest(
-        "SYSTEM_INFO"
-      );
-    },
-
-    dashboard: async function () {
-      return await apiRequest(
-        "DASHBOARD"
-      );
-    },
-
-    logout: logout
-  };
-
-
-console.log(
-  "GGL QMS CONTROL CENTER JS LOADED"
-);
-console.log(
-  "API:",
-  API_URL
-);
+window.openModule = openModule;
+window.logout = logout;
+window.closeForgotPassword = closeForgotPassword;
+window.createRecord = createRecord;
+window.updateRecord = updateRecord;
+window.deleteRecord = deleteRecord;
+window.getRecord = getRecord;
+window.uploadFile = uploadFile;
+window.getFile = getFile;
+window.generateReport = generateReport;
+window.loadUsers = loadUsers;
+window.createUser = createUser;
+window.updateUser = updateUser;
+window.deleteUser = deleteUser;
+window.editUser = editUser;
+window.loadAuditLog = loadAuditLog;
+window.loadLookups = loadLookups;
+window.getSystemInfo = getSystemInfo;
+window.loadDashboard = loadDashboard;
