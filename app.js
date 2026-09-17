@@ -7,7 +7,7 @@
 
 
 /* =====================================================
-   API
+   API CONFIGURATION
    ===================================================== */
 
 const API_URL =
@@ -24,9 +24,7 @@ const App = {
 
     user: null,
 
-    currentPage: "dashboard",
-
-    initialized: false
+    currentPage: "dashboard"
 
 };
 
@@ -97,11 +95,20 @@ const DOM = {
     forgotPasswordModal:
         document.getElementById("forgotPasswordModal"),
 
+    closeForgotPasswordBtn:
+        document.getElementById("closeForgotPasswordBtn"),
+
     forgotStep1:
         document.getElementById("forgotStep1"),
 
     forgotStep2:
         document.getElementById("forgotStep2"),
+
+    resetRequestForm:
+        document.getElementById("resetRequestForm"),
+
+    resetPasswordForm:
+        document.getElementById("resetPasswordForm"),
 
     resetUsername:
         document.getElementById("resetUsername"),
@@ -121,6 +128,11 @@ const DOM = {
     resetPasswordBtn:
         document.getElementById("resetPasswordBtn"),
 
+    backToResetUsernameBtn:
+        document.getElementById(
+            "backToResetUsernameBtn"
+        ),
+
     resetMessage:
         document.getElementById("resetMessage")
 
@@ -128,7 +140,7 @@ const DOM = {
 
 
 /* =====================================================
-   INITIALIZATION
+   INIT
    ===================================================== */
 
 document.addEventListener(
@@ -152,65 +164,75 @@ function init() {
 
 function bindEvents() {
 
-    if (DOM.loginForm) {
+    /* Login */
 
-        DOM.loginForm.addEventListener(
-            "submit",
-            handleLogin
-        );
-
-    }
+    DOM.loginForm?.addEventListener(
+        "submit",
+        handleLogin
+    );
 
 
-    if (DOM.togglePassword) {
+    /* Password visibility */
 
-        DOM.togglePassword.addEventListener(
-            "click",
-            togglePassword
-        );
-
-    }
+    DOM.togglePassword?.addEventListener(
+        "click",
+        togglePassword
+    );
 
 
-    if (DOM.logoutButton) {
+    /* Logout */
 
-        DOM.logoutButton.addEventListener(
-            "click",
-            handleLogout
-        );
-
-    }
+    DOM.logoutButton?.addEventListener(
+        "click",
+        handleLogout
+    );
 
 
-    if (DOM.forgotPasswordBtn) {
+    /* Forgot password */
 
-        DOM.forgotPasswordBtn.addEventListener(
-            "click",
-            openForgotPassword
-        );
-
-    }
+    DOM.forgotPasswordBtn?.addEventListener(
+        "click",
+        openForgotPassword
+    );
 
 
-    if (DOM.sendResetCodeBtn) {
-
-        DOM.sendResetCodeBtn.addEventListener(
-            "click",
-            sendResetCode
-        );
-
-    }
+    DOM.closeForgotPasswordBtn?.addEventListener(
+        "click",
+        closeForgotPassword
+    );
 
 
-    if (DOM.resetPasswordBtn) {
+    DOM.resetRequestForm?.addEventListener(
+        "submit",
+        event => {
 
-        DOM.resetPasswordBtn.addEventListener(
-            "click",
-            resetPassword
-        );
+            event.preventDefault();
 
-    }
+            sendResetCode();
 
+        }
+    );
+
+
+    DOM.resetPasswordForm?.addEventListener(
+        "submit",
+        event => {
+
+            event.preventDefault();
+
+            resetPassword();
+
+        }
+    );
+
+
+    DOM.backToResetUsernameBtn?.addEventListener(
+        "click",
+        backToResetUsername
+    );
+
+
+    /* Navigation */
 
     document
         .querySelectorAll(".nav-item")
@@ -235,43 +257,58 @@ function bindEvents() {
         });
 
 
-    if (DOM.mobileMenu) {
+    /* Mobile */
 
-        DOM.mobileMenu.addEventListener(
-            "click",
-            () => {
+    DOM.mobileMenu?.addEventListener(
+        "click",
+        () => {
 
-                DOM.sidebar.classList.toggle(
-                    "mobile-open"
-                );
+            DOM.sidebar?.classList.toggle(
+                "mobile-open"
+            );
 
-            }
-        );
-
-    }
+        }
+    );
 
 
-    /* Close modal when clicking outside */
+    /* Click outside modal */
 
-    if (DOM.forgotPasswordModal) {
+    DOM.forgotPasswordModal?.addEventListener(
+        "click",
+        event => {
 
-        DOM.forgotPasswordModal.addEventListener(
-            "click",
-            event => {
+            if (
+                event.target ===
+                DOM.forgotPasswordModal
+            ) {
 
-                if (
-                    event.target ===
-                    DOM.forgotPasswordModal
-                ) {
-
-                    closeForgotPassword();
-
-                }
+                closeForgotPassword();
 
             }
-        );
 
-    }
+        }
+    );
+
+
+    /* Escape key */
+
+    document.addEventListener(
+        "keydown",
+        event => {
+
+            if (
+                event.key === "Escape" &&
+                DOM.forgotPasswordModal?.classList.contains(
+                    "show"
+                )
+            ) {
+
+                closeForgotPassword();
+
+            }
+
+        }
+    );
 
 }
 
@@ -286,11 +323,13 @@ async function handleLogin(event) {
 
     clearLoginError();
 
+
     const username =
         DOM.username.value.trim();
 
     const password =
         DOM.password.value;
+
 
     if (!username) {
 
@@ -302,6 +341,7 @@ async function handleLogin(event) {
 
     }
 
+
     if (!password) {
 
         showLoginError(
@@ -312,18 +352,23 @@ async function handleLogin(event) {
 
     }
 
+
     setLoginLoading(true);
+
 
     try {
 
         const response =
             await apiRequest({
 
-                action: "LOGIN",
+                action:
+                    "LOGIN",
 
-                username: username,
+                username:
+                    username,
 
-                password: password
+                password:
+                    password
 
             });
 
@@ -357,7 +402,11 @@ async function handleLogin(event) {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "QMS LOGIN ERROR:",
+            error
+        );
+
 
         showLoginError(
             "Unable to connect to the QMS server."
@@ -378,11 +427,13 @@ async function handleLogin(event) {
 
 function openForgotPassword() {
 
-    if (!DOM.forgotPasswordModal)
-        return;
-
-    DOM.forgotPasswordModal.classList.add(
+    DOM.forgotPasswordModal?.classList.add(
         "show"
+    );
+
+    DOM.forgotPasswordModal?.setAttribute(
+        "aria-hidden",
+        "false"
     );
 
 
@@ -405,16 +456,28 @@ function openForgotPassword() {
 
     DOM.resetMessage.innerHTML = "";
 
+
+    setTimeout(
+        () => {
+
+            DOM.resetUsername?.focus();
+
+        },
+        100
+    );
+
 }
 
 
 function closeForgotPassword() {
 
-    if (!DOM.forgotPasswordModal)
-        return;
-
-    DOM.forgotPasswordModal.classList.remove(
+    DOM.forgotPasswordModal?.classList.remove(
         "show"
+    );
+
+    DOM.forgotPasswordModal?.setAttribute(
+        "aria-hidden",
+        "true"
     );
 
 }
@@ -428,6 +491,7 @@ function backToResetUsername() {
     DOM.forgotStep2.style.display =
         "none";
 
+
     DOM.resetCode.value = "";
 
     DOM.newResetPassword.value = "";
@@ -436,8 +500,15 @@ function backToResetUsername() {
 
     DOM.resetMessage.innerHTML = "";
 
+
+    DOM.resetUsername.focus();
+
 }
 
+
+/* =====================================================
+   SEND RESET CODE
+   ===================================================== */
 
 async function sendResetCode() {
 
@@ -500,7 +571,7 @@ async function sendResetCode() {
 
 
         showResetMessage(
-            "A verification code has been sent to your registered email address.",
+            "A verification code has been sent to your registered recovery email.",
             "success"
         );
 
@@ -511,9 +582,10 @@ async function sendResetCode() {
     } catch (error) {
 
         console.error(
-            "Password reset request:",
+            "FORGOT PASSWORD ERROR:",
             error
         );
+
 
         showResetMessage(
             "Unable to connect to the QMS server.",
@@ -533,6 +605,10 @@ async function sendResetCode() {
 
 }
 
+
+/* =====================================================
+   RESET PASSWORD
+   ===================================================== */
 
 async function resetPassword() {
 
@@ -662,6 +738,7 @@ async function resetPassword() {
 
         showLoginError("");
 
+
         showToast(
             "Password reset successfully. Please sign in.",
             "success"
@@ -674,9 +751,10 @@ async function resetPassword() {
     } catch (error) {
 
         console.error(
-            "Password reset:",
+            "RESET PASSWORD ERROR:",
             error
         );
+
 
         showResetMessage(
             "Unable to connect to the QMS server.",
@@ -765,17 +843,26 @@ async function handleLogout() {
 
 function saveSession() {
 
-    localStorage.setItem(
-        "GGL_QMS_TOKEN",
-        App.token
-    );
+    if (App.token) {
 
-    localStorage.setItem(
-        "GGL_QMS_USER",
-        JSON.stringify(
-            App.user
-        )
-    );
+        localStorage.setItem(
+            "GGL_QMS_TOKEN",
+            App.token
+        );
+
+    }
+
+
+    if (App.user) {
+
+        localStorage.setItem(
+            "GGL_QMS_USER",
+            JSON.stringify(
+                App.user
+            )
+        );
+
+    }
 
 }
 
@@ -809,6 +896,7 @@ function restoreSession() {
 
         App.user =
             JSON.parse(user);
+
 
         verifySession();
 
@@ -859,6 +947,7 @@ async function verifySession() {
         App.user =
             response.user;
 
+
         saveSession();
 
         showApplication();
@@ -868,7 +957,10 @@ async function verifySession() {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "SESSION ERROR:",
+            error
+        );
 
         clearSession();
 
@@ -880,17 +972,24 @@ async function verifySession() {
 
 
 /* =====================================================
-   API
+   API REQUEST
    ===================================================== */
 
 async function apiRequest(payload) {
+
+    console.log(
+        "QMS API REQUEST:",
+        payload.action
+    );
+
 
     const response =
         await fetch(
             API_URL,
             {
 
-                method: "POST",
+                method:
+                    "POST",
 
                 headers: {
 
@@ -908,6 +1007,22 @@ async function apiRequest(payload) {
         );
 
 
+    const text =
+        await response.text();
+
+
+    console.log(
+        "QMS API HTTP:",
+        response.status
+    );
+
+
+    console.log(
+        "QMS API RESPONSE:",
+        text
+    );
+
+
     if (!response.ok) {
 
         throw new Error(
@@ -918,13 +1033,23 @@ async function apiRequest(payload) {
     }
 
 
-    return await response.json();
+    try {
+
+        return JSON.parse(text);
+
+    } catch (error) {
+
+        throw new Error(
+            "INVALID_JSON_RESPONSE"
+        );
+
+    }
 
 }
 
 
 /* =====================================================
-   APPLICATION DISPLAY
+   APPLICATION
    ===================================================== */
 
 function showApplication() {
@@ -1254,7 +1379,10 @@ async function loadDashboard() {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "DASHBOARD ERROR:",
+            error
+        );
 
 
         DOM.pageContent.innerHTML = `
@@ -1420,21 +1548,37 @@ function renderDashboard(data) {
                     <div class="system-status">
 
                         <div>
-                            <strong>API</strong>
+
+                            <strong>
+                                API
+                            </strong>
+
                             <span class="status status-closed">
                                 ONLINE
                             </span>
+
                         </div>
 
+
                         <div>
-                            <strong>Session</strong>
+
+                            <strong>
+                                Session
+                            </strong>
+
                             <span class="status status-closed">
                                 ACTIVE
                             </span>
+
                         </div>
 
+
                         <div>
-                            <strong>User</strong>
+
+                            <strong>
+                                User
+                            </strong>
+
                             <span>
                                 ${escapeHtml(
                                     App.user?.name ||
@@ -1442,6 +1586,7 @@ function renderDashboard(data) {
                                     ""
                                 )}
                             </span>
+
                         </div>
 
                     </div>
@@ -1640,7 +1785,10 @@ async function loadUsers() {
 
     } catch (error) {
 
-        console.error(error);
+        console.error(
+            "USERS ERROR:",
+            error
+        );
 
         showAccessDenied();
 
@@ -1660,6 +1808,7 @@ function renderUsers(users) {
             user["User ID"] ||
             user.userId ||
             "";
+
 
         rows += `
 
@@ -1766,6 +1915,7 @@ function renderUsers(users) {
                         </tr>
 
                     </thead>
+
 
                     <tbody>
 
@@ -1903,7 +2053,9 @@ function hasRole(roles) {
         ).toUpperCase();
 
 
-    return roles.includes(role);
+    return roles.includes(
+        role
+    );
 
 }
 
@@ -2123,6 +2275,9 @@ function getReadableError(error) {
 
         RESET_CODE_USED:
             "This verification code has already been used.",
+
+        RESET_CODE_TOO_MANY_ATTEMPTS:
+            "Too many verification attempts. Request a new code.",
 
         EMAIL_NOT_CONFIGURED:
             "No recovery email is configured for this account.",

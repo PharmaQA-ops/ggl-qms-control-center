@@ -24,7 +24,7 @@
 <div class="app">
 
     <!-- =====================================================
-         LOGIN PAGE
+         LOGIN
          ===================================================== -->
 
     <section
@@ -33,6 +33,8 @@
     >
 
         <div class="login-card">
+
+            <!-- BRAND -->
 
             <div class="brand">
 
@@ -55,6 +57,8 @@
             </div>
 
 
+            <!-- HEADING -->
+
             <div class="login-heading">
 
                 <h2>
@@ -67,6 +71,8 @@
 
             </div>
 
+
+            <!-- LOGIN FORM -->
 
             <form
                 id="loginForm"
@@ -123,7 +129,7 @@
                 </div>
 
 
-                <!-- LOGIN ERROR -->
+                <!-- ERROR -->
 
                 <div
                     id="loginError"
@@ -131,7 +137,7 @@
                 ></div>
 
 
-                <!-- LOGIN BUTTON -->
+                <!-- SIGN IN -->
 
                 <button
                     type="submit"
@@ -151,7 +157,7 @@
                 </button>
 
 
-                <!-- FORGOT PASSWORD -->
+                <!-- FORGOT -->
 
                 <button
                     type="button"
@@ -163,6 +169,8 @@
 
             </form>
 
+
+            <!-- FOOTER -->
 
             <div class="login-footer">
 
@@ -188,17 +196,23 @@
     <div
         id="forgotPasswordModal"
         class="modal"
+        aria-hidden="true"
     >
 
-        <div class="modal-card">
+        <div
+            class="modal-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="resetPasswordTitle"
+        >
 
-            <!-- MODAL HEADER -->
+            <!-- HEADER -->
 
             <div class="modal-header">
 
                 <div>
 
-                    <h3>
+                    <h3 id="resetPasswordTitle">
                         Reset Password
                     </h3>
 
@@ -208,10 +222,11 @@
 
                 </div>
 
+
                 <button
                     type="button"
                     class="modal-close"
-                    onclick="closeForgotPassword()"
+                    id="closeForgotPasswordBtn"
                     aria-label="Close"
                 >
                     ×
@@ -220,7 +235,7 @@
             </div>
 
 
-            <!-- RESET MESSAGE -->
+            <!-- MESSAGE -->
 
             <div
                 id="resetMessage"
@@ -229,49 +244,59 @@
 
 
             <!-- =================================================
-                 STEP 1
+                 STEP 1 — USERNAME
                  ================================================= -->
 
-            <div id="forgotStep1">
+            <div
+                id="forgotStep1"
+            >
 
-                <div class="form-group">
-
-                    <label for="resetUsername">
-                        Username
-                    </label>
-
-                    <input
-                        id="resetUsername"
-                        type="text"
-                        placeholder="Enter your username"
-                        autocomplete="username"
-                    >
-
-                </div>
-
-
-                <p class="modal-description">
-
-                    Enter your QMS username. If the account has a
-                    registered email address, a verification code
-                    will be sent to that email.
-
-                </p>
-
-
-                <button
-                    type="button"
-                    id="sendResetCodeBtn"
-                    class="login-button"
+                <form
+                    id="resetRequestForm"
+                    autocomplete="off"
                 >
-                    Send Reset Code
-                </button>
+
+                    <div class="form-group">
+
+                        <label for="resetUsername">
+                            Username
+                        </label>
+
+                        <input
+                            id="resetUsername"
+                            type="text"
+                            placeholder="Enter your username"
+                            autocomplete="username"
+                            required
+                        >
+
+                    </div>
+
+
+                    <p class="modal-description">
+
+                        Enter your QMS username. A verification
+                        code will be sent to the registered
+                        recovery email address.
+
+                    </p>
+
+
+                    <button
+                        type="submit"
+                        id="sendResetCodeBtn"
+                        class="login-button"
+                    >
+                        Send Reset Code
+                    </button>
+
+                </form>
 
             </div>
 
 
             <!-- =================================================
-                 STEP 2
+                 STEP 2 — CODE + NEW PASSWORD
                  ================================================= -->
 
             <div
@@ -279,69 +304,92 @@
                 style="display:none;"
             >
 
-                <div class="form-group">
-
-                    <label for="resetCode">
-                        Verification Code
-                    </label>
-
-                    <input
-                        id="resetCode"
-                        type="text"
-                        inputmode="numeric"
-                        maxlength="6"
-                        placeholder="Enter 6-digit code"
-                        autocomplete="one-time-code"
-                    >
-
-                </div>
-
-
-                <div class="form-group">
-
-                    <label for="newResetPassword">
-                        New Password
-                    </label>
-
-                    <input
-                        id="newResetPassword"
-                        type="password"
-                        placeholder="Enter new password"
-                        autocomplete="new-password"
-                    >
-
-                </div>
-
-
-                <div class="form-group">
-
-                    <label for="confirmResetPassword">
-                        Confirm Password
-                    </label>
-
-                    <input
-                        id="confirmResetPassword"
-                        type="password"
-                        placeholder="Confirm new password"
-                        autocomplete="new-password"
-                    >
-
-                </div>
-
-
-                <button
-                    type="button"
-                    id="resetPasswordBtn"
-                    class="login-button"
+                <form
+                    id="resetPasswordForm"
+                    autocomplete="off"
                 >
-                    Reset Password
-                </button>
 
+                    <!-- CODE -->
+
+                    <div class="form-group">
+
+                        <label for="resetCode">
+                            Verification Code
+                        </label>
+
+                        <input
+                            id="resetCode"
+                            type="text"
+                            inputmode="numeric"
+                            maxlength="6"
+                            pattern="[0-9]{6}"
+                            placeholder="Enter 6-digit code"
+                            autocomplete="one-time-code"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- NEW PASSWORD -->
+
+                    <div class="form-group">
+
+                        <label for="newResetPassword">
+                            New Password
+                        </label>
+
+                        <input
+                            id="newResetPassword"
+                            type="password"
+                            minlength="8"
+                            placeholder="Enter new password"
+                            autocomplete="new-password"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- CONFIRM -->
+
+                    <div class="form-group">
+
+                        <label for="confirmResetPassword">
+                            Confirm Password
+                        </label>
+
+                        <input
+                            id="confirmResetPassword"
+                            type="password"
+                            minlength="8"
+                            placeholder="Confirm new password"
+                            autocomplete="new-password"
+                            required
+                        >
+
+                    </div>
+
+
+                    <!-- RESET -->
+
+                    <button
+                        type="submit"
+                        id="resetPasswordBtn"
+                        class="login-button"
+                    >
+                        Reset Password
+                    </button>
+
+                </form>
+
+
+                <!-- BACK -->
 
                 <button
                     type="button"
+                    id="backToResetUsernameBtn"
                     class="forgot-password-btn"
-                    onclick="backToResetUsername()"
                 >
                     Use Different Username
                 </button>
@@ -536,6 +584,7 @@
                 <button
                     id="mobileMenu"
                     class="mobile-menu"
+                    type="button"
                 >
                     ☰
                 </button>
@@ -571,16 +620,12 @@
             </header>
 
 
-            <!-- PAGE -->
+            <!-- PAGE CONTENT -->
 
             <div
                 id="pageContent"
                 class="page-content"
-            >
-
-                <!-- Dynamic pages load here -->
-
-            </div>
+            ></div>
 
         </main>
 
