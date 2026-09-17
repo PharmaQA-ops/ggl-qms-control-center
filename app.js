@@ -7,7 +7,7 @@
 
 
 /* =====================================================
-   API CONFIGURATION
+   API
    ===================================================== */
 
 const API_URL =
@@ -89,7 +89,40 @@ const DOM = {
         document.getElementById("mobileMenu"),
 
     sidebar:
-        document.getElementById("sidebar")
+        document.getElementById("sidebar"),
+
+    forgotPasswordBtn:
+        document.getElementById("forgotPasswordBtn"),
+
+    forgotPasswordModal:
+        document.getElementById("forgotPasswordModal"),
+
+    forgotStep1:
+        document.getElementById("forgotStep1"),
+
+    forgotStep2:
+        document.getElementById("forgotStep2"),
+
+    resetUsername:
+        document.getElementById("resetUsername"),
+
+    resetCode:
+        document.getElementById("resetCode"),
+
+    newResetPassword:
+        document.getElementById("newResetPassword"),
+
+    confirmResetPassword:
+        document.getElementById("confirmResetPassword"),
+
+    sendResetCodeBtn:
+        document.getElementById("sendResetCodeBtn"),
+
+    resetPasswordBtn:
+        document.getElementById("resetPasswordBtn"),
+
+    resetMessage:
+        document.getElementById("resetMessage")
 
 };
 
@@ -104,7 +137,7 @@ document.addEventListener(
 );
 
 
-async function init() {
+function init() {
 
     bindEvents();
 
@@ -149,6 +182,36 @@ function bindEvents() {
     }
 
 
+    if (DOM.forgotPasswordBtn) {
+
+        DOM.forgotPasswordBtn.addEventListener(
+            "click",
+            openForgotPassword
+        );
+
+    }
+
+
+    if (DOM.sendResetCodeBtn) {
+
+        DOM.sendResetCodeBtn.addEventListener(
+            "click",
+            sendResetCode
+        );
+
+    }
+
+
+    if (DOM.resetPasswordBtn) {
+
+        DOM.resetPasswordBtn.addEventListener(
+            "click",
+            resetPassword
+        );
+
+    }
+
+
     document
         .querySelectorAll(".nav-item")
         .forEach(button => {
@@ -181,6 +244,29 @@ function bindEvents() {
                 DOM.sidebar.classList.toggle(
                     "mobile-open"
                 );
+
+            }
+        );
+
+    }
+
+
+    /* Close modal when clicking outside */
+
+    if (DOM.forgotPasswordModal) {
+
+        DOM.forgotPasswordModal.addEventListener(
+            "click",
+            event => {
+
+                if (
+                    event.target ===
+                    DOM.forgotPasswordModal
+                ) {
+
+                    closeForgotPassword();
+
+                }
 
             }
         );
@@ -232,10 +318,15 @@ async function handleLogin(event) {
 
         const response =
             await apiRequest({
+
                 action: "LOGIN",
+
                 username: username,
+
                 password: password
+
             });
+
 
         if (!response.success) {
 
@@ -249,17 +340,20 @@ async function handleLogin(event) {
 
         }
 
+
         App.token =
             response.token;
 
         App.user =
             response.user;
 
+
         saveSession();
 
         showApplication();
 
         await loadDashboard();
+
 
     } catch (error) {
 
@@ -279,6 +373,354 @@ async function handleLogin(event) {
 
 
 /* =====================================================
+   FORGOT PASSWORD
+   ===================================================== */
+
+function openForgotPassword() {
+
+    if (!DOM.forgotPasswordModal)
+        return;
+
+    DOM.forgotPasswordModal.classList.add(
+        "show"
+    );
+
+
+    DOM.forgotStep1.style.display =
+        "block";
+
+    DOM.forgotStep2.style.display =
+        "none";
+
+
+    DOM.resetUsername.value =
+        DOM.username.value.trim();
+
+
+    DOM.resetCode.value = "";
+
+    DOM.newResetPassword.value = "";
+
+    DOM.confirmResetPassword.value = "";
+
+    DOM.resetMessage.innerHTML = "";
+
+}
+
+
+function closeForgotPassword() {
+
+    if (!DOM.forgotPasswordModal)
+        return;
+
+    DOM.forgotPasswordModal.classList.remove(
+        "show"
+    );
+
+}
+
+
+function backToResetUsername() {
+
+    DOM.forgotStep1.style.display =
+        "block";
+
+    DOM.forgotStep2.style.display =
+        "none";
+
+    DOM.resetCode.value = "";
+
+    DOM.newResetPassword.value = "";
+
+    DOM.confirmResetPassword.value = "";
+
+    DOM.resetMessage.innerHTML = "";
+
+}
+
+
+async function sendResetCode() {
+
+    const username =
+        DOM.resetUsername.value.trim();
+
+
+    if (!username) {
+
+        showResetMessage(
+            "Please enter your username.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    DOM.sendResetCodeBtn.disabled =
+        true;
+
+    DOM.sendResetCodeBtn.textContent =
+        "Sending...";
+
+
+    try {
+
+        const response =
+            await apiRequest({
+
+                action:
+                    "FORGOT_PASSWORD",
+
+                username:
+                    username
+
+            });
+
+
+        if (!response.success) {
+
+            showResetMessage(
+                getReadableError(
+                    response.error
+                ),
+                "error"
+            );
+
+            return;
+
+        }
+
+
+        DOM.forgotStep1.style.display =
+            "none";
+
+        DOM.forgotStep2.style.display =
+            "block";
+
+
+        showResetMessage(
+            "A verification code has been sent to your registered email address.",
+            "success"
+        );
+
+
+        DOM.resetCode.focus();
+
+
+    } catch (error) {
+
+        console.error(
+            "Password reset request:",
+            error
+        );
+
+        showResetMessage(
+            "Unable to connect to the QMS server.",
+            "error"
+        );
+
+
+    } finally {
+
+        DOM.sendResetCodeBtn.disabled =
+            false;
+
+        DOM.sendResetCodeBtn.textContent =
+            "Send Reset Code";
+
+    }
+
+}
+
+
+async function resetPassword() {
+
+    const username =
+        DOM.resetUsername.value.trim();
+
+    const code =
+        DOM.resetCode.value.trim();
+
+    const password =
+        DOM.newResetPassword.value;
+
+    const confirmPassword =
+        DOM.confirmResetPassword.value;
+
+
+    if (!username) {
+
+        showResetMessage(
+            "Username is required.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (!/^\d{6}$/.test(code)) {
+
+        showResetMessage(
+            "Enter the 6-digit verification code.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (!password) {
+
+        showResetMessage(
+            "Enter a new password.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (password.length < 8) {
+
+        showResetMessage(
+            "Password must contain at least 8 characters.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    if (password !== confirmPassword) {
+
+        showResetMessage(
+            "Passwords do not match.",
+            "error"
+        );
+
+        return;
+
+    }
+
+
+    DOM.resetPasswordBtn.disabled =
+        true;
+
+    DOM.resetPasswordBtn.textContent =
+        "Resetting...";
+
+
+    try {
+
+        const response =
+            await apiRequest({
+
+                action:
+                    "RESET_PASSWORD",
+
+                username:
+                    username,
+
+                code:
+                    code,
+
+                newPassword:
+                    password
+
+            });
+
+
+        if (!response.success) {
+
+            showResetMessage(
+                getReadableError(
+                    response.error
+                ),
+                "error"
+            );
+
+            return;
+
+        }
+
+
+        closeForgotPassword();
+
+
+        DOM.username.value =
+            username;
+
+        DOM.password.value =
+            "";
+
+
+        showLoginError("");
+
+        showToast(
+            "Password reset successfully. Please sign in.",
+            "success"
+        );
+
+
+        DOM.password.focus();
+
+
+    } catch (error) {
+
+        console.error(
+            "Password reset:",
+            error
+        );
+
+        showResetMessage(
+            "Unable to connect to the QMS server.",
+            "error"
+        );
+
+
+    } finally {
+
+        DOM.resetPasswordBtn.disabled =
+            false;
+
+        DOM.resetPasswordBtn.textContent =
+            "Reset Password";
+
+    }
+
+}
+
+
+function showResetMessage(
+    message,
+    type
+) {
+
+    if (!DOM.resetMessage)
+        return;
+
+
+    const className =
+        type === "error"
+            ? "error-message"
+            : "success-message";
+
+
+    DOM.resetMessage.innerHTML =
+        `<div class="${className}">
+            ${escapeHtml(message)}
+        </div>`;
+
+}
+
+
+/* =====================================================
    LOGOUT
    ===================================================== */
 
@@ -289,8 +731,13 @@ async function handleLogout() {
         if (App.token) {
 
             await apiRequest({
-                action: "LOGOUT",
-                token: App.token
+
+                action:
+                    "LOGOUT",
+
+                token:
+                    App.token
+
             });
 
         }
@@ -304,6 +751,7 @@ async function handleLogout() {
 
     }
 
+
     clearSession();
 
     showLogin();
@@ -312,7 +760,7 @@ async function handleLogout() {
 
 
 /* =====================================================
-   SESSION STORAGE
+   SESSION
    ===================================================== */
 
 function saveSession() {
@@ -344,6 +792,7 @@ function restoreSession() {
             "GGL_QMS_USER"
         );
 
+
     if (!token || !user) {
 
         showLogin();
@@ -351,6 +800,7 @@ function restoreSession() {
         return;
 
     }
+
 
     try {
 
@@ -361,6 +811,7 @@ function restoreSession() {
             JSON.parse(user);
 
         verifySession();
+
 
     } catch (error) {
 
@@ -381,9 +832,15 @@ async function verifySession() {
 
         const response =
             await apiRequest({
-                action: "ME",
-                token: App.token
+
+                action:
+                    "ME",
+
+                token:
+                    App.token
+
             });
+
 
         if (
             !response.success ||
@@ -398,6 +855,7 @@ async function verifySession() {
 
         }
 
+
         App.user =
             response.user;
 
@@ -406,6 +864,7 @@ async function verifySession() {
         showApplication();
 
         await loadDashboard();
+
 
     } catch (error) {
 
@@ -421,7 +880,7 @@ async function verifySession() {
 
 
 /* =====================================================
-   API REQUEST
+   API
    ===================================================== */
 
 async function apiRequest(payload) {
@@ -448,6 +907,7 @@ async function apiRequest(payload) {
             }
         );
 
+
     if (!response.ok) {
 
         throw new Error(
@@ -456,6 +916,7 @@ async function apiRequest(payload) {
         );
 
     }
+
 
     return await response.json();
 
@@ -505,28 +966,25 @@ function updateUserInterface() {
     if (!App.user)
         return;
 
+
     DOM.userName.textContent =
         App.user.name ||
         App.user.username ||
         "User";
+
 
     DOM.userRole.textContent =
         App.user.role ||
         "USER";
 
 
-    /*
-     * Admin-only navigation
-     */
-
     const role =
         String(
             App.user.role || ""
         ).toUpperCase();
 
-    if (
-        role === "ADMIN"
-    ) {
+
+    if (role === "ADMIN") {
 
         DOM.adminNavigation
             .classList.remove(
@@ -553,6 +1011,7 @@ async function navigate(page) {
 
     App.currentPage =
         page;
+
 
     document
         .querySelectorAll(
@@ -611,19 +1070,9 @@ async function navigate(page) {
         "QMS";
 
 
-    /*
-     * Close mobile sidebar
-     */
-
-    if (
-        DOM.sidebar
-    ) {
-
-        DOM.sidebar.classList.remove(
-            "mobile-open"
-        );
-
-    }
+    DOM.sidebar?.classList.remove(
+        "mobile-open"
+    );
 
 
     switch (page) {
@@ -717,11 +1166,7 @@ async function navigate(page) {
 
         case "users":
 
-            if (
-                hasRole(
-                    ["ADMIN"]
-                )
-            ) {
+            if (hasRole(["ADMIN"])) {
 
                 await loadUsers();
 
@@ -736,11 +1181,7 @@ async function navigate(page) {
 
         case "auditlog":
 
-            if (
-                hasRole(
-                    ["ADMIN"]
-                )
-            ) {
+            if (hasRole(["ADMIN"])) {
 
                 loadAuditLog();
 
@@ -780,6 +1221,7 @@ async function loadDashboard() {
 
     `;
 
+
     try {
 
         const response =
@@ -794,9 +1236,7 @@ async function loadDashboard() {
             });
 
 
-        if (
-            !response.success
-        ) {
+        if (!response.success) {
 
             handleApiError(
                 response
@@ -815,6 +1255,7 @@ async function loadDashboard() {
     } catch (error) {
 
         console.error(error);
+
 
         DOM.pageContent.innerHTML = `
 
@@ -836,10 +1277,6 @@ async function loadDashboard() {
 
 }
 
-
-/* =====================================================
-   DASHBOARD RENDER
-   ===================================================== */
 
 function renderDashboard(data) {
 
@@ -866,32 +1303,24 @@ function renderDashboard(data) {
 
         <div class="toolbar">
 
-            <div class="toolbar-left">
+            <div>
 
-                <div>
+                <div class="panel-title">
+                    QMS Overview
+                </div>
 
-                    <div class="panel-title">
-                        QMS Overview
-                    </div>
-
-                    <div class="panel-subtitle">
-                        Current quality and compliance position
-                    </div>
-
+                <div class="panel-subtitle">
+                    Current quality and compliance position
                 </div>
 
             </div>
 
-            <div class="toolbar-right">
-
-                <button
-                    class="btn btn-primary"
-                    onclick="navigate('capa')"
-                >
-                    + New CAPA
-                </button>
-
-            </div>
+            <button
+                class="btn btn-primary"
+                onclick="navigate('capa')"
+            >
+                + New CAPA
+            </button>
 
         </div>
 
@@ -1008,7 +1437,9 @@ function renderDashboard(data) {
                             <strong>User</strong>
                             <span>
                                 ${escapeHtml(
-                                    App.user.name
+                                    App.user?.name ||
+                                    App.user?.username ||
+                                    ""
                                 )}
                             </span>
                         </div>
@@ -1086,10 +1517,6 @@ function renderDashboard(data) {
 }
 
 
-/* =====================================================
-   KPI HELPERS
-   ===================================================== */
-
 function kpiCard(
     label,
     value,
@@ -1154,9 +1581,7 @@ function quickButton(
             class="btn btn-secondary"
             onclick="navigate('${page}')"
         >
-
             ${escapeHtml(label)}
-
         </button>
 
     `;
@@ -1189,10 +1614,7 @@ async function loadUsers() {
             await apiRequest({
 
                 action:
-                    "LIST",
-
-                module:
-                    "USERS",
+                    "ADMIN_USERS",
 
                 token:
                     App.token
@@ -1200,13 +1622,21 @@ async function loadUsers() {
             });
 
 
-        /*
-         * USERS isn't a normal module in the current
-         * module map, so load directly through the
-         * dedicated function below.
-         */
+        if (!response.success) {
 
-        await loadUsersDirect();
+            handleApiError(
+                response
+            );
+
+            return;
+
+        }
+
+
+        renderUsers(
+            response.users || []
+        );
+
 
     } catch (error) {
 
@@ -1219,143 +1649,74 @@ async function loadUsers() {
 }
 
 
-async function loadUsersDirect() {
-
-    const response =
-        await apiRequest({
-
-            action:
-                "ADMIN_USERS",
-
-            token:
-                App.token
-
-        });
-
-
-    if (
-        !response.success
-    ) {
-
-        /*
-         * This endpoint will be added to the backend
-         * during the Admin module stage.
-         */
-
-        DOM.pageContent.innerHTML = `
-
-            <div class="panel">
-
-                <div class="panel-header">
-
-                    <div>
-
-                        <div class="panel-title">
-                            User Administration
-                        </div>
-
-                        <div class="panel-subtitle">
-                            Backend user management endpoint pending
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <div class="panel-body">
-
-                    User administration will be activated
-                    in the next backend update.
-
-                </div>
-
-            </div>
-
-        `;
-
-        return;
-
-    }
-
-    renderUsers(
-        response.users || []
-    );
-
-}
-
-
 function renderUsers(users) {
 
     let rows = "";
 
-    users.forEach(
-        user => {
 
-            rows += `
+    users.forEach(user => {
 
-                <tr>
+        const id =
+            user["User ID"] ||
+            user.userId ||
+            "";
 
-                    <td>
-                        ${escapeHtml(
-                            user["User ID"] ||
-                            user.userId ||
-                            ""
-                        )}
-                    </td>
+        rows += `
 
-                    <td>
-                        ${escapeHtml(
-                            user.Username ||
-                            user.username ||
-                            ""
-                        )}
-                    </td>
+            <tr>
 
-                    <td>
-                        ${escapeHtml(
-                            user.Name ||
-                            user.name ||
-                            ""
-                        )}
-                    </td>
+                <td>
+                    ${escapeHtml(id)}
+                </td>
 
-                    <td>
-                        ${escapeHtml(
-                            user.Role ||
-                            user.role ||
-                            ""
-                        )}
-                    </td>
+                <td>
+                    ${escapeHtml(
+                        user.Username ||
+                        user.username ||
+                        ""
+                    )}
+                </td>
 
-                    <td>
-                        ${escapeHtml(
-                            user.Status ||
-                            user.status ||
-                            ""
-                        )}
-                    </td>
+                <td>
+                    ${escapeHtml(
+                        user.Name ||
+                        user.name ||
+                        ""
+                    )}
+                </td>
 
-                    <td>
+                <td>
+                    ${escapeHtml(
+                        user.Role ||
+                        user.role ||
+                        ""
+                    )}
+                </td>
 
-                        <button
-                            class="btn btn-secondary"
-                            onclick="editUser('${escapeJs(
-                                user["User ID"] ||
-                                user.userId ||
-                                ""
-                            )}')"
-                        >
-                            Edit
-                        </button>
+                <td>
+                    ${escapeHtml(
+                        user.Status ||
+                        user.status ||
+                        ""
+                    )}
+                </td>
 
-                    </td>
+                <td>
 
-                </tr>
+                    <button
+                        class="btn btn-secondary"
+                        onclick="editUser('${escapeJs(id)}')"
+                    >
+                        Edit
+                    </button>
 
-            `;
+                </td>
 
-        }
-    );
+            </tr>
+
+        `;
+
+    });
 
 
     DOM.pageContent.innerHTML = `
@@ -1433,7 +1794,7 @@ function renderUsers(users) {
 
 
 /* =====================================================
-   AUDIT LOG PLACEHOLDER
+   AUDIT LOG
    ===================================================== */
 
 function loadAuditLog() {
@@ -1457,6 +1818,7 @@ function loadAuditLog() {
                 </div>
 
             </div>
+
 
             <div class="panel-body">
 
@@ -1501,6 +1863,7 @@ function renderModulePlaceholder(
 
             </div>
 
+
             <div class="panel-body">
 
                 <div class="empty-state">
@@ -1528,21 +1891,19 @@ function renderModulePlaceholder(
    ACCESS CONTROL
    ===================================================== */
 
-function hasRole(
-    roles
-) {
+function hasRole(roles) {
 
     if (!App.user)
         return false;
+
 
     const role =
         String(
             App.user.role || ""
         ).toUpperCase();
 
-    return roles.includes(
-        role
-    );
+
+    return roles.includes(role);
 
 }
 
@@ -1611,12 +1972,11 @@ function togglePassword() {
    LOGIN UI
    ===================================================== */
 
-function setLoginLoading(
-    loading
-) {
+function setLoginLoading(loading) {
 
     DOM.loginButton.disabled =
         loading;
+
 
     if (loading) {
 
@@ -1643,9 +2003,7 @@ function setLoginLoading(
 }
 
 
-function showLoginError(
-    message
-) {
+function showLoginError(message) {
 
     DOM.loginError.textContent =
         message;
@@ -1671,6 +2029,7 @@ function clearSession() {
 
     App.user = null;
 
+
     localStorage.removeItem(
         "GGL_QMS_TOKEN"
     );
@@ -1686,15 +2045,14 @@ function clearSession() {
    API ERROR
    ===================================================== */
 
-function handleApiError(
-    response
-) {
+function handleApiError(response) {
 
     if (
         response &&
         (
             response.error ===
             "SESSION_EXPIRED" ||
+
             response.error ===
             "AUTH_REQUIRED"
         )
@@ -1712,6 +2070,7 @@ function handleApiError(
 
     }
 
+
     showToast(
         getReadableError(
             response?.error
@@ -1722,9 +2081,7 @@ function handleApiError(
 }
 
 
-function getReadableError(
-    error
-) {
+function getReadableError(error) {
 
     const errors = {
 
@@ -1755,10 +2112,29 @@ function getReadableError(
         PASSWORD_REQUIRED:
             "Password is required.",
 
+        PASSWORD_TOO_SHORT:
+            "Password must contain at least 8 characters.",
+
+        RESET_CODE_INVALID:
+            "The verification code is invalid.",
+
+        RESET_CODE_EXPIRED:
+            "The verification code has expired.",
+
+        RESET_CODE_USED:
+            "This verification code has already been used.",
+
+        EMAIL_NOT_CONFIGURED:
+            "No recovery email is configured for this account.",
+
+        RESET_FAILED:
+            "Password reset failed.",
+
         NETWORK_ERROR:
             "Network connection failed."
 
     };
+
 
     return (
         errors[error] ||
@@ -1783,6 +2159,7 @@ function showToast(
             ".toast-container"
         );
 
+
     if (!container) {
 
         container =
@@ -1805,11 +2182,14 @@ function showToast(
             "div"
         );
 
+
     toast.className =
         "toast " + type;
 
+
     toast.textContent =
         message;
+
 
     container.appendChild(
         toast
@@ -1829,16 +2209,37 @@ function showToast(
 
 
 /* =====================================================
+   USER FUNCTIONS
+   ===================================================== */
+
+function openAddUser() {
+
+    showToast(
+        "User administration form will be connected next.",
+        "success"
+    );
+
+}
+
+
+function editUser() {
+
+    showToast(
+        "User editing will be connected next.",
+        "success"
+    );
+
+}
+
+
+/* =====================================================
    ESCAPING
    ===================================================== */
 
-function escapeHtml(
-    value
-) {
+function escapeHtml(value) {
 
     return String(
-        value ??
-        ""
+        value ?? ""
     )
         .replace(
             /&/g,
@@ -1864,13 +2265,10 @@ function escapeHtml(
 }
 
 
-function escapeJs(
-    value
-) {
+function escapeJs(value) {
 
     return String(
-        value ??
-        ""
+        value ?? ""
     )
         .replace(
             /\\/g,
@@ -1889,41 +2287,24 @@ function escapeJs(
 
 
 /* =====================================================
-   TEMP USER FUNCTIONS
-   ===================================================== */
-
-function openAddUser() {
-
-    showToast(
-        "User administration will be activated next.",
-        "success"
-    );
-
-}
-
-
-function editUser() {
-
-    showToast(
-        "User editing will be activated next.",
-        "success"
-    );
-
-}
-
-
-/* =====================================================
    DEBUG
    ===================================================== */
 
 window.QMS = {
 
-    App: App,
+    App:
+        App,
 
-    navigate: navigate,
+    navigate:
+        navigate,
 
-    apiRequest: apiRequest,
+    apiRequest:
+        apiRequest,
 
-    logout: handleLogout
+    logout:
+        handleLogout,
+
+    forgotPassword:
+        openForgotPassword
 
 };
