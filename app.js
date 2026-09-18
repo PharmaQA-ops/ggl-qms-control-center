@@ -1092,12 +1092,12 @@ async function loadReportsPage() {
     </div>
 
     <div class="qms-report-grid">
-      ${reportCard("CAPA Management Report", "CAPA Management Report")}
-      ${reportCard("Complaint Report", "Complaint Report")}
-      ${reportCard("Compliance Status Report", "Compliance Status Report")}
-      ${reportCard("Audit Findings Report", "Audit Findings Report")}
-      ${reportCard("Overdue Actions Report", "Overdue Actions Report")}
-      ${reportCard("Evidence Index", "Evidence Index")}
+      ${reportCard("CAPA Management Report", "RPT-001")}
+      ${reportCard("Complaint Report", "RPT-002")}
+      ${reportCard("Compliance Status Report", "RPT-003")}
+      ${reportCard("Audit Findings Report", "RPT-004")}
+      ${reportCard("Overdue Actions Report", "RPT-005")}
+      ${reportCard("Evidence Index", "RPT-006")}
     </div>
 
     <div id="reportContent" class="qms-report-content"></div>
