@@ -1779,7 +1779,7 @@ window.loadLookups = loadLookups;
 window.getSystemInfo = getSystemInfo;
 window.loadDashboard = loadDashboard;
 
-\nwindow.loadCAPA = loadCAPA;
+window.loadCAPA = loadCAPA;
 window.showCAPAForm = showCAPAForm;
 window.submitCAPAForm = submitCAPAForm;
 window.cancelCAPAForm = cancelCAPAForm;
