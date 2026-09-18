@@ -1086,46 +1086,108 @@ async function loadReportsPage() {
   container.innerHTML = `
     <div class="qms-page-header">
       <div>
-        <h1>Reports</h1>
-        <p>Generate audit-ready QMS reports.</p>
+        <h1>Report Center</h1>
+        <p>Generate controlled QMS reports from live records.</p>
+      </div>
+    </div>
+
+    <div class="qms-panel" style="margin-bottom:20px;">
+      <div class="qms-panel-header">
+        <div>
+          <h3>Report Controls</h3>
+          <p>Optional reporting period. Leave blank to include all available records.</p>
+        </div>
+      </div>
+
+      <div class="qms-form-grid">
+        <div class="form-group">
+          <label for="reportFromDate">From Date</label>
+          <input id="reportFromDate" type="date">
+        </div>
+
+        <div class="form-group">
+          <label for="reportToDate">To Date</label>
+          <input id="reportToDate" type="date">
+        </div>
       </div>
     </div>
 
     <div class="qms-report-grid">
-      ${reportCard("CAPA Management Report", "RPT-001")}
-      ${reportCard("Complaint Report", "RPT-002")}
-      ${reportCard("Compliance Status Report", "RPT-003")}
-      ${reportCard("Audit Findings Report", "RPT-004")}
-      ${reportCard("Overdue Actions Report", "RPT-005")}
-      ${reportCard("Evidence Index", "RPT-006")}
+      ${reportCard("CAPA Management Report", "RPT-001", "Complete CAPA status, aging and linkage report")}
+      ${reportCard("Complaint Report", "RPT-002", "Complaint register, severity and closure report")}
+      ${reportCard("Compliance Status Report", "RPT-003", "Requirement status, risk and review report")}
+      ${reportCard("Audit Findings Report", "RPT-004", "Audit findings, risk and CAPA linkage report")}
+      ${reportCard("Overdue Actions Report", "RPT-005", "Open actions past target date")}
+      ${reportCard("Evidence Index", "RPT-006", "Evidence register with Drive references")}
     </div>
 
     <div id="reportContent" class="qms-report-content"></div>
   `;
 }
 
-function reportCard(label, reportId) {
+function reportCard(label, reportId, description) {
   return `
-    <button type="button" class="qms-module-card"
-      onclick="generateReport('${escapeJs(reportId)}')">
+    <div class="qms-module-card" style="cursor:default;">
       <strong>${escapeHtml(label)}</strong>
-      <span>Generate report</span>
-    </button>
+      <span>${escapeHtml(reportId)} · ${escapeHtml(description)}</span>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
+        <button type="button"
+          class="qms-primary-button"
+          onclick="generateReport('${escapeJs(reportId)}')">
+          Generate
+        </button>
+      </div>
+    </div>
   `;
 }
 
 async function generateReport(reportId, options = {}) {
+  const fromDate =
+    options.fromDate ||
+    document.getElementById("reportFromDate")?.value ||
+    "";
+
+  const toDate =
+    options.toDate ||
+    document.getElementById("reportToDate")?.value ||
+    "";
+
+  const content = document.getElementById("reportContent");
+
+  if (content) {
+    content.innerHTML = `
+      <div class="qms-loading">
+        <div class="loader"></div>
+        <p>Generating ${escapeHtml(reportId)}...</p>
+      </div>
+    `;
+  }
+
   const result = await apiRequest("REPORT", {
     reportId,
-    options
+    options: {
+      fromDate,
+      toDate
+    }
   });
+
+  console.log("REPORT RESULT:", result);
 
   if (!result || !result.success) {
     showMessage(getFriendlyError(result), "error");
+    if (content) {
+      content.innerHTML = `
+        <div class="qms-empty-state">
+          <h3>Report generation failed</h3>
+          <p>${escapeHtml(getFriendlyError(result))}</p>
+        </div>
+      `;
+    }
     return null;
   }
 
   renderReport(result);
+  showMessage(`${result.title || reportId} generated successfully.`, "success");
   return result;
 }
 
@@ -1139,16 +1201,65 @@ function renderReport(result) {
     result.records ||
     [];
 
-  if (!Array.isArray(rows) || !rows.length) {
-    container.innerHTML = `
-      <div class="qms-empty-state">
-        <h3>No report data available</h3>
-      </div>
-    `;
-    return;
-  }
+  const summary = result.summary || {};
 
-  container.innerHTML = buildTable(rows);
+  const downloadButton = (key, label) => {
+    const target = result[key];
+    if (!target || !target.url) return "";
+    return `
+      <a class="qms-primary-button"
+         href="${escapeHtml(target.url)}"
+         target="_blank"
+         rel="noopener noreferrer">
+        ${escapeHtml(label)}
+      </a>
+    `;
+  };
+
+  container.innerHTML = `
+    <div class="qms-panel" style="margin-top:20px;">
+      <div class="qms-panel-header">
+        <div>
+          <h3>${escapeHtml(result.title || result.reportId || "Report")}</h3>
+          <p>
+            ${escapeHtml(result.reportId || "")}
+            · ${escapeHtml(String(result.recordCount ?? rows.length))} records
+          </p>
+        </div>
+
+        <div style="display:flex;gap:8px;flex-wrap:wrap;">
+          ${downloadButton("pdf", "Download PDF")}
+          ${downloadButton("xlsx", "Download XLSX")}
+          ${downloadButton("csv", "Download CSV")}
+        </div>
+      </div>
+
+      ${
+        Object.keys(summary).length
+          ? `
+            <div class="qms-stat-grid">
+              ${Object.entries(summary).map(([key,value]) => `
+                <div class="qms-stat-card">
+                  <span>${escapeHtml(key)}</span>
+                  <strong>${escapeHtml(value)}</strong>
+                </div>
+              `).join("")}
+            </div>
+          `
+          : ""
+      }
+
+      ${
+        Array.isArray(rows) && rows.length
+          ? buildTable(rows)
+          : `
+            <div class="qms-empty-state">
+              <h3>No records in this report</h3>
+            </div>
+          `
+      }
+    </div>
+  `;
 }
 
 /* =========================================================
@@ -1214,7 +1325,7 @@ async function deleteRecord(module, recordId) {
 
   const result = await apiRequest("DELETE", {
     module: MODULE_MAP[module] || String(module).toUpperCase(),
-    id: recordId
+    recordId: recordId
   });
 
   if (!result || !result.success) {
