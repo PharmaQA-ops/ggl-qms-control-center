@@ -1141,6 +1141,53 @@ function reportCard(label, reportId, description) {
   `;
 }
 
+
+function qmsDownloadGeneratedFile(file, fallbackName) {
+  if (!file) return;
+
+  const url = file.downloadUrl || file.directDownloadUrl || file.url;
+  if (!url) return;
+
+  const name = file.fileName || file.name || fallbackName || "QMS_Report";
+
+  // Google Drive's uc endpoint is preferable when the backend supplies a fileId.
+  const downloadUrl = file.fileId
+    ? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(file.fileId)}`
+    : url;
+
+  const a = document.createElement("a");
+  a.href = downloadUrl;
+  a.download = name;
+  a.target = "_blank";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+}
+
+function qmsDownloadGeneratedReports(report) {
+  if (!report) return;
+
+  qmsDownloadGeneratedFile(
+    report.pdf,
+    "QMS_Report.pdf"
+  );
+
+  setTimeout(() => {
+    qmsDownloadGeneratedFile(
+      report.xlsx,
+      "QMS_Report.xlsx"
+    );
+  }, 500);
+
+  setTimeout(() => {
+    qmsDownloadGeneratedFile(
+      report.csv,
+      "QMS_Report.csv"
+    );
+  }, 1000);
+}
+
 async function generateReport(reportId, options = {}) {
   const fromDate =
     options.fromDate ||
@@ -1172,7 +1219,6 @@ async function generateReport(reportId, options = {}) {
   });
 
   console.log("REPORT RESULT:", result);
-
   if (!result || !result.success) {
     showMessage(getFriendlyError(result), "error");
     if (content) {
@@ -1187,7 +1233,8 @@ async function generateReport(reportId, options = {}) {
   }
 
   renderReport(result);
-  showMessage(`${result.title || reportId} generated successfully.`, "success");
+  qmsDownloadGeneratedReports(result);
+  showMessage(`${result.title || reportId} generated successfully. Downloads started.`, "success");
   return result;
 }
 
@@ -1897,3 +1944,9 @@ window.cancelCAPAForm = cancelCAPAForm;
 window.viewCAPA = viewCAPA;
 window.editCAPA = editCAPA;
 window.deleteCAPA = deleteCAPA;
+
+
+/* =========================================================
+   REPORT AUTO-DOWNLOAD
+   One Generate click creates and starts all requested exports.
+   ========================================================= */
