@@ -281,6 +281,8 @@ function showApp() {
     application.style.display = "";
   }
 
+  // Always ensure the logout control exists after entering the application.
+  setupLogout();
   updateUserInterface();
 }
 
@@ -329,15 +331,46 @@ function applyRBAC() {
    ========================================================= */
 
 function setupLogout() {
-  const button = document.getElementById("logoutButton");
+  let button = document.getElementById("logoutButton");
 
+  // Bind the logout button already present in index.html.
   if (button) {
+    button.type = "button";
+    button.removeEventListener("click", logout);
     button.addEventListener("click", logout);
   }
 
-  document.querySelectorAll("[data-action='logout']").forEach(element => {
+  // Support any legacy/custom logout controls.
+  document.querySelectorAll(
+    "#logoutBtn, [data-action='logout'], [data-page='logout']"
+  ).forEach(element => {
+    element.removeEventListener("click", logout);
     element.addEventListener("click", logout);
   });
+
+  // Safety fallback: create a logout button if the HTML does not contain one.
+  if (!button) {
+    const sidebarBottom = document.querySelector(".sidebar-bottom");
+    const application = document.getElementById("application");
+
+    if (sidebarBottom) {
+      button = document.createElement("button");
+      button.id = "logoutButton";
+      button.type = "button";
+      button.className = "logout-button";
+      button.textContent = "Sign Out";
+      button.addEventListener("click", logout);
+      sidebarBottom.appendChild(button);
+    } else if (application) {
+      button = document.createElement("button");
+      button.id = "logoutButton";
+      button.type = "button";
+      button.className = "logout-button qms-floating-logout";
+      button.textContent = "Sign Out";
+      button.addEventListener("click", logout);
+      application.appendChild(button);
+    }
+  }
 }
 
 async function logout() {
@@ -406,6 +439,8 @@ async function openModule(page) {
 
   if (page === "dashboard") {
     await loadDashboard();
+  } else if (page === "capa") {
+    await loadCAPA();
   } else if (page === "reports") {
     await loadReportsPage();
   } else if (page === "users") {
@@ -533,6 +568,329 @@ function moduleCard(label, page, description) {
       <span>${escapeHtml(description)}</span>
     </button>
   `;
+}
+
+/* =========================================================
+   CAPA MODULE
+   Functional register + create + view + edit + delete
+   ========================================================= */
+
+const CAPA_FIELDS = [
+  "CAPA ID","Date Raised","Source","Department","Process",
+  "Issue / Nonconformity","Problem Statement","Immediate Correction",
+  "Root Cause","Root Cause Method","Corrective Action","Preventive Action",
+  "Action Owner","Target Date","Priority","Risk Level","Status",
+  "Effectiveness Check","Effectiveness Date","Effectiveness Result",
+  "Closure Date","Closed By","Evidence Link","Complaint ID","Audit ID",
+  "Compliance ID","Remarks"
+];
+
+let capaRecordsCache = [];
+
+async function loadCAPA() {
+  const container = getPageContent();
+  if (!container) return;
+
+  container.innerHTML = `<div class="qms-loading"><div class="loader"></div><p>Loading CAPA register...</p></div>`;
+
+  const result = await apiRequest("LIST", { module: "CAPA" });
+  console.log("CAPA LIST RESULT:", result);
+
+  if (!result || !result.success) {
+    container.innerHTML = `<div class="qms-empty-state"><h3>Unable to load CAPA</h3><p>${escapeHtml(getFriendlyError(result))}</p><button type="button" onclick="loadCAPA()">Retry</button></div>`;
+    return;
+  }
+
+  capaRecordsCache = Array.isArray(result.records) ? result.records :
+    Array.isArray(result.rows) ? result.rows :
+    Array.isArray(result.data) ? result.data : [];
+
+  renderCAPAPage();
+}
+
+function renderCAPAPage() {
+  const container = getPageContent();
+  if (!container) return;
+
+  const openCount = capaRecordsCache.filter(r =>
+    !["CLOSED","CLOSE"].includes(String(r["Status"] || "").trim().toUpperCase())
+  ).length;
+
+  const overdueCount = capaRecordsCache.filter(isCAPAOverdue).length;
+  const closedCount = capaRecordsCache.length - openCount;
+
+  container.innerHTML = `
+    <div class="qms-page-header">
+      <div>
+        <h1>CAPA Management</h1>
+        <p>Corrective and preventive action register.</p>
+      </div>
+      <button type="button" class="qms-primary-button" onclick="showCAPAForm()">+ New CAPA</button>
+    </div>
+
+    <div class="qms-stat-grid">
+      <div class="qms-stat-card"><span>Total CAPA</span><strong>${capaRecordsCache.length}</strong></div>
+      <div class="qms-stat-card"><span>Open CAPA</span><strong>${openCount}</strong></div>
+      <div class="qms-stat-card"><span>Overdue</span><strong>${overdueCount}</strong></div>
+      <div class="qms-stat-card"><span>Closed</span><strong>${Math.max(0, closedCount)}</strong></div>
+    </div>
+
+    <div id="capaFormContainer"></div>
+
+    <div class="qms-panel">
+      <div class="qms-panel-header">
+        <div>
+          <h3>CAPA Register</h3>
+          <p>All corrective and preventive actions.</p>
+        </div>
+      </div>
+      <div id="capaTableContainer">${buildCAPATable()}</div>
+    </div>
+  `;
+}
+
+function buildCAPATable() {
+  if (!capaRecordsCache.length) {
+    return `<div class="qms-empty-state"><h3>No CAPA records</h3><p>Create the first CAPA record using the button above.</p></div>`;
+  }
+
+  const columns = [
+    "CAPA ID","Date Raised","Source","Department",
+    "Issue / Nonconformity","Action Owner","Target Date",
+    "Priority","Risk Level","Status"
+  ];
+
+  let html = `<div class="qms-table-wrapper"><table class="qms-table"><thead><tr>`;
+  columns.forEach(c => html += `<th>${escapeHtml(c)}</th>`);
+  html += `<th>Actions</th></tr></thead><tbody>`;
+
+  capaRecordsCache.forEach(record => {
+    const id = record["CAPA ID"] || "";
+    html += `<tr>`;
+    columns.forEach(c => html += `<td>${formatCell(record[c])}</td>`);
+    html += `
+      <td>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;">
+          <button type="button" onclick="viewCAPA('${escapeJs(id)}')">View</button>
+          <button type="button" onclick="editCAPA('${escapeJs(id)}')">Edit</button>
+          ${isAdmin() ? `<button type="button" onclick="deleteCAPA('${escapeJs(id)}')">Delete</button>` : ""}
+        </div>
+      </td>
+    </tr>`;
+  });
+
+  html += `</tbody></table></div>`;
+  return html;
+}
+
+function showCAPAForm(record = null) {
+  const container = document.getElementById("capaFormContainer");
+  if (!container) return;
+
+  const editing = !!record;
+  const today = new Date().toISOString().slice(0,10);
+  const value = key => escapeHtml(record?.[key] ?? "");
+
+  container.innerHTML = `
+    <div class="qms-panel" style="margin-bottom:20px;">
+      <div class="qms-panel-header">
+        <div>
+          <h3>${editing ? "Edit CAPA" : "New CAPA"}</h3>
+          <p>${editing ? escapeHtml(record["CAPA ID"] || "") : "Create a new corrective and preventive action."}</p>
+        </div>
+        <button type="button" onclick="cancelCAPAForm()">Close</button>
+      </div>
+
+      <form id="capaForm" onsubmit="submitCAPAForm(event)">
+        <input type="hidden" name="CAPA ID" value="${value("CAPA ID")}">
+
+        <div class="qms-form-grid">
+          ${capaInput("Date Raised","date",record?.["Date Raised"] || today,true)}
+          ${capaSelect("Source",record?.["Source"],["Complaint","Audit","Compliance","Internal","Customer","Management Review","Other"],true)}
+          ${capaInput("Department","text",value("Department"),true)}
+          ${capaInput("Process","text",value("Process"),true)}
+          ${capaTextarea("Issue / Nonconformity",value("Issue / Nonconformity"),true)}
+          ${capaTextarea("Problem Statement",value("Problem Statement"),true)}
+          ${capaTextarea("Immediate Correction",value("Immediate Correction"))}
+          ${capaTextarea("Root Cause",value("Root Cause"))}
+          ${capaSelect("Root Cause Method",record?.["Root Cause Method"],["5 Why","Fishbone / Ishikawa","Pareto","8D","Fault Tree","Other"])}
+          ${capaTextarea("Corrective Action",value("Corrective Action"),true)}
+          ${capaTextarea("Preventive Action",value("Preventive Action"))}
+          ${capaInput("Action Owner","text",value("Action Owner"),true)}
+          ${capaInput("Target Date","date",record?.["Target Date"] || "")}
+          ${capaSelect("Priority",record?.["Priority"],["LOW","MEDIUM","HIGH","CRITICAL"],true)}
+          ${capaSelect("Risk Level",record?.["Risk Level"],["LOW","MEDIUM","HIGH","CRITICAL"],true)}
+          ${capaSelect("Status",record?.["Status"],["OPEN","IN PROGRESS","PENDING EFFECTIVENESS","CLOSED"],true)}
+          ${capaTextarea("Effectiveness Check",value("Effectiveness Check"))}
+          ${capaInput("Effectiveness Date","date",record?.["Effectiveness Date"] || "")}
+          ${capaTextarea("Effectiveness Result",value("Effectiveness Result"))}
+          ${capaInput("Closure Date","date",record?.["Closure Date"] || "")}
+          ${capaInput("Closed By","text",value("Closed By"))}
+          ${capaInput("Evidence Link","url",value("Evidence Link"))}
+          ${capaInput("Complaint ID","text",value("Complaint ID"))}
+          ${capaInput("Audit ID","text",value("Audit ID"))}
+          ${capaInput("Compliance ID","text",value("Compliance ID"))}
+          ${capaTextarea("Remarks",value("Remarks"))}
+        </div>
+
+        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
+          <button type="button" onclick="cancelCAPAForm()">Cancel</button>
+          <button type="submit" class="qms-primary-button">${editing ? "Update CAPA" : "Create CAPA"}</button>
+        </div>
+      </form>
+    </div>`;
+}
+
+function capaInput(label,type,value="",required=false) {
+  return `<div class="form-group"><label>${escapeHtml(label)}${required ? " *" : ""}</label><input name="${escapeHtml(label)}" type="${type}" value="${value}" ${required ? "required" : ""}></div>`;
+}
+
+function capaTextarea(label,value="",required=false) {
+  return `<div class="form-group" style="grid-column:1/-1;"><label>${escapeHtml(label)}${required ? " *" : ""}</label><textarea name="${escapeHtml(label)}" rows="3" ${required ? "required" : ""}>${value}</textarea></div>`;
+}
+
+function capaSelect(label,selected,options,required=false) {
+  const current = String(selected || "");
+  return `<div class="form-group"><label>${escapeHtml(label)}${required ? " *" : ""}</label><select name="${escapeHtml(label)}" ${required ? "required" : ""}><option value="">Select...</option>${options.map(o => `<option value="${escapeHtml(o)}" ${current === o ? "selected" : ""}>${escapeHtml(o)}</option>`).join("")}</select></div>`;
+}
+
+async function submitCAPAForm(event) {
+  event.preventDefault();
+
+  const form = event.target;
+  const fd = new FormData(form);
+  const record = {};
+
+  fd.forEach((value,key) => {
+    if (key !== "CAPA ID") record[key] = value;
+  });
+
+  const capaId = String(fd.get("CAPA ID") || "");
+
+  if (String(record["Status"] || "").toUpperCase() === "CLOSED" && !record["Closure Date"]) {
+    record["Closure Date"] = new Date().toISOString().slice(0,10);
+  }
+
+  const result = capaId
+    ? await apiRequest("UPDATE", { module:"CAPA", recordId:capaId, record })
+    : await apiRequest("CREATE", { module:"CAPA", record });
+
+  console.log("CAPA SAVE RESULT:", result);
+
+  if (!result || !result.success) {
+    showMessage(getFriendlyError(result),"error");
+    return;
+  }
+
+  showMessage(
+    capaId ? `CAPA ${capaId} updated successfully.` :
+      `CAPA ${result.recordId || "record"} created successfully.`,
+    "success"
+  );
+
+  await loadCAPA();
+}
+
+function cancelCAPAForm() {
+  const container = document.getElementById("capaFormContainer");
+  if (container) container.innerHTML = "";
+}
+
+async function viewCAPA(capaId) {
+  const result = await apiRequest("GET", {
+    module:"CAPA",
+    recordId:capaId
+  });
+
+  if (!result || !result.success || !result.record) {
+    showMessage(getFriendlyError(result),"error");
+    return;
+  }
+
+  renderCAPADetail(result.record);
+}
+
+function renderCAPADetail(record) {
+  const container = document.getElementById("capaFormContainer");
+  if (!container) return;
+
+  const rows = CAPA_FIELDS.map(field => `
+    <div class="qms-info-list">
+      <div>
+        <span>${escapeHtml(field)}</span>
+        <strong>${formatCell(record[field]) || "—"}</strong>
+      </div>
+    </div>
+  `).join("");
+
+  container.innerHTML = `
+    <div class="qms-panel" style="margin-bottom:20px;">
+      <div class="qms-panel-header">
+        <div>
+          <h3>${escapeHtml(record["CAPA ID"] || "CAPA")}</h3>
+          <p>CAPA record detail</p>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" onclick="editCAPA('${escapeJs(record["CAPA ID"] || "")}')">Edit</button>
+          <button type="button" onclick="cancelCAPAForm()">Close</button>
+        </div>
+      </div>
+      ${rows}
+    </div>`;
+}
+
+async function editCAPA(capaId) {
+  const result = await apiRequest("GET", {
+    module:"CAPA",
+    recordId:capaId
+  });
+
+  if (!result || !result.success || !result.record) {
+    showMessage(getFriendlyError(result),"error");
+    return;
+  }
+
+  showCAPAForm(result.record);
+  window.scrollTo({top:0,behavior:"smooth"});
+}
+
+async function deleteCAPA(capaId) {
+  if (!isAdmin()) {
+    showMessage("Administrator access required.","error");
+    return;
+  }
+
+  if (!capaId || !confirm(`Delete ${capaId}? This action cannot be undone.`)) return;
+
+  const result = await apiRequest("DELETE", {
+    module:"CAPA",
+    recordId:capaId
+  });
+
+  if (!result || !result.success) {
+    showMessage(getFriendlyError(result),"error");
+    return;
+  }
+
+  showMessage(`${capaId} deleted successfully.`,"success");
+  await loadCAPA();
+}
+
+function isCAPAOverdue(record) {
+  const status = String(record["Status"] || "").trim().toUpperCase();
+  if (status === "CLOSED") return false;
+
+  const raw = record["Target Date"];
+  if (!raw) return false;
+
+  const date = new Date(raw);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+  date.setHours(0,0,0,0);
+
+  return date < today;
 }
 
 /* =========================================================
@@ -800,7 +1158,7 @@ function renderReport(result) {
 async function getRecord(module, recordId) {
   const result = await apiRequest("GET", {
     module: MODULE_MAP[module] || String(module).toUpperCase(),
-    id: recordId
+    recordId: recordId
   });
 
   if (!result || !result.success) {
@@ -816,7 +1174,7 @@ async function getRecord(module, recordId) {
 async function createRecord(module, data) {
   const result = await apiRequest("CREATE", {
     module: MODULE_MAP[module] || String(module).toUpperCase(),
-    data
+    record: data
   });
 
   if (!result || !result.success) {
@@ -831,8 +1189,8 @@ async function createRecord(module, data) {
 async function updateRecord(module, recordId, data) {
   const result = await apiRequest("UPDATE", {
     module: MODULE_MAP[module] || String(module).toUpperCase(),
-    id: recordId,
-    data
+    recordId: recordId,
+    record: data
   });
 
   if (!result || !result.success) {
@@ -1420,3 +1778,11 @@ window.loadAuditLog = loadAuditLog;
 window.loadLookups = loadLookups;
 window.getSystemInfo = getSystemInfo;
 window.loadDashboard = loadDashboard;
+
+\nwindow.loadCAPA = loadCAPA;
+window.showCAPAForm = showCAPAForm;
+window.submitCAPAForm = submitCAPAForm;
+window.cancelCAPAForm = cancelCAPAForm;
+window.viewCAPA = viewCAPA;
+window.editCAPA = editCAPA;
+window.deleteCAPA = deleteCAPA;
