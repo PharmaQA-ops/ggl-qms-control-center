@@ -1,641 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-
-    <meta charset="UTF-8">
-
-    <meta
-        name="viewport"
-        content="width=device-width, initial-scale=1.0"
-    >
-
-    <title>GGL QMS Control Center</title>
-
-    <link
-        rel="stylesheet"
-        href="style.css"
-    >
-
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="theme-color" content="#101827">
+  <title>GGL QMS Control Center</title>
+  <link rel="stylesheet" href="style.css">
 </head>
-
 <body>
 
-<div class="app">
-
-    <!-- =====================================================
-         LOGIN
-         ===================================================== -->
-
-    <section
-        id="loginPage"
-        class="login-page"
-    >
-
-        <div class="login-card">
-
-            <!-- BRAND -->
-
-            <div class="brand">
-
-                <div class="brand-mark">
-                    GGL
-                </div>
-
-                <div>
-
-                    <h1>
-                        QMS CONTROL CENTER
-                    </h1>
-
-                    <p>
-                        CAPA • Compliance • Complaints • Audits
-                    </p>
-
-                </div>
-
-            </div>
-
-
-            <!-- HEADING -->
-
-            <div class="login-heading">
-
-                <h2>
-                    Welcome back
-                </h2>
-
-                <p>
-                    Sign in to continue to the QMS system.
-                </p>
-
-            </div>
-
-
-            <!-- LOGIN FORM -->
-
-            <form
-                id="loginForm"
-                autocomplete="off"
-            >
-
-                <!-- USERNAME -->
-
-                <div class="form-group">
-
-                    <label for="username">
-                        Username
-                    </label>
-
-                    <input
-                        id="username"
-                        type="text"
-                        placeholder="Enter username"
-                        autocomplete="username"
-                        required
-                    >
-
-                </div>
-
-
-                <!-- PASSWORD -->
-
-                <div class="form-group">
-
-                    <label for="password">
-                        Password
-                    </label>
-
-                    <div class="password-wrapper">
-
-                        <input
-                            id="password"
-                            type="password"
-                            placeholder="Enter password"
-                            autocomplete="current-password"
-                            required
-                        >
-
-                        <button
-                            type="button"
-                            id="togglePassword"
-                            class="password-toggle"
-                        >
-                            Show
-                        </button>
-
-                    </div>
-
-                </div>
-
-
-                <!-- ERROR -->
-
-                <div
-                    id="loginError"
-                    class="login-error"
-                ></div>
-
-
-                <!-- SIGN IN -->
-
-                <button
-                    type="submit"
-                    id="loginButton"
-                    class="login-button"
-                >
-
-                    <span id="loginButtonText">
-                        Sign In
-                    </span>
-
-                    <span
-                        id="loginLoader"
-                        class="loader hidden"
-                    ></span>
-
-                </button>
-
-
-                <!-- FORGOT -->
-
-                <button
-                    type="button"
-                    id="forgotPasswordBtn"
-                    class="forgot-password-btn"
-                >
-                    Forgot Password?
-                </button>
-
-            </form>
-
-
-            <!-- FOOTER -->
-
-            <div class="login-footer">
-
-                <span>
-                    GGL QMS Control Center
-                </span>
-
-                <span>
-                    Secure Access
-                </span>
-
-            </div>
-
-        </div>
-
-    </section>
-
-
-    <!-- =====================================================
-         FORGOT PASSWORD MODAL
-         ===================================================== -->
-
-    <div
-        id="forgotPasswordModal"
-        class="modal"
-        aria-hidden="true"
-    >
-
-        <div
-            class="modal-card"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="resetPasswordTitle"
-        >
-
-            <!-- HEADER -->
-
-            <div class="modal-header">
-
-                <div>
-
-                    <h3 id="resetPasswordTitle">
-                        Reset Password
-                    </h3>
-
-                    <p>
-                        Recover your QMS account securely.
-                    </p>
-
-                </div>
-
-
-                <button
-                    type="button"
-                    class="modal-close"
-                    id="closeForgotPasswordBtn"
-                    aria-label="Close"
-                >
-                    ×
-                </button>
-
-            </div>
-
-
-            <!-- MESSAGE -->
-
-            <div
-                id="resetMessage"
-                class="reset-message"
-            ></div>
-
-
-            <!-- =================================================
-                 STEP 1 — USERNAME
-                 ================================================= -->
-
-            <div
-                id="forgotStep1"
-            >
-
-                <form
-                    id="resetRequestForm"
-                    autocomplete="off"
-                >
-
-                    <div class="form-group">
-
-                        <label for="resetUsername">
-                            Username
-                        </label>
-
-                        <input
-                            id="resetUsername"
-                            type="text"
-                            placeholder="Enter your username"
-                            autocomplete="username"
-                            required
-                        >
-
-                    </div>
-
-
-                    <p class="modal-description">
-
-                        Enter your QMS username. A verification
-                        code will be sent to the registered
-                        recovery email address.
-
-                    </p>
-
-
-                    <button
-                        type="submit"
-                        id="sendResetCodeBtn"
-                        class="login-button"
-                    >
-                        Send Reset Code
-                    </button>
-
-                </form>
-
-            </div>
-
-
-            <!-- =================================================
-                 STEP 2 — CODE + NEW PASSWORD
-                 ================================================= -->
-
-            <div
-                id="forgotStep2"
-                style="display:none;"
-            >
-
-                <form
-                    id="resetPasswordForm"
-                    autocomplete="off"
-                >
-
-                    <!-- CODE -->
-
-                    <div class="form-group">
-
-                        <label for="resetCode">
-                            Verification Code
-                        </label>
-
-                        <input
-                            id="resetCode"
-                            type="text"
-                            inputmode="numeric"
-                            maxlength="6"
-                            pattern="[0-9]{6}"
-                            placeholder="Enter 6-digit code"
-                            autocomplete="one-time-code"
-                            required
-                        >
-
-                    </div>
-
-
-                    <!-- NEW PASSWORD -->
-
-                    <div class="form-group">
-
-                        <label for="newResetPassword">
-                            New Password
-                        </label>
-
-                        <input
-                            id="newResetPassword"
-                            type="password"
-                            minlength="8"
-                            placeholder="Enter new password"
-                            autocomplete="new-password"
-                            required
-                        >
-
-                    </div>
-
-
-                    <!-- CONFIRM -->
-
-                    <div class="form-group">
-
-                        <label for="confirmResetPassword">
-                            Confirm Password
-                        </label>
-
-                        <input
-                            id="confirmResetPassword"
-                            type="password"
-                            minlength="8"
-                            placeholder="Confirm new password"
-                            autocomplete="new-password"
-                            required
-                        >
-
-                    </div>
-
-
-                    <!-- RESET -->
-
-                    <button
-                        type="submit"
-                        id="resetPasswordBtn"
-                        class="login-button"
-                    >
-                        Reset Password
-                    </button>
-
-                </form>
-
-
-                <!-- BACK -->
-
-                <button
-                    type="button"
-                    id="backToResetUsernameBtn"
-                    class="forgot-password-btn"
-                >
-                    Use Different Username
-                </button>
-
-            </div>
-
-        </div>
-
+<div id="loginPage" class="login-page">
+  <div class="login-card">
+    <div class="brand">
+      <div class="brand-mark">GGL</div>
+      <div>
+        <h1>QMS CONTROL CENTER</h1>
+        <p>Quality Management System</p>
+      </div>
     </div>
 
-
-    <!-- =====================================================
-         APPLICATION
-         ===================================================== -->
-
-    <section
-        id="application"
-        class="application hidden"
-    >
-
-        <!-- SIDEBAR -->
-
-        <aside
-            id="sidebar"
-            class="sidebar"
-        >
-
-            <div class="sidebar-brand">
-
-                <div class="brand-mark">
-                    GGL
-                </div>
-
-                <div>
-
-                    <strong>
-                        QMS
-                    </strong>
-
-                    <span>
-                        CONTROL CENTER
-                    </span>
-
-                </div>
-
-            </div>
-
-
-            <!-- NAVIGATION -->
-
-            <nav class="navigation">
-
-                <button
-                    class="nav-item active"
-                    data-page="dashboard"
-                >
-                    <span>⌂</span>
-                    Dashboard
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="capa"
-                >
-                    <span>◈</span>
-                    CAPA
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="complaints"
-                >
-                    <span>◇</span>
-                    Complaints
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="compliance"
-                >
-                    <span>✓</span>
-                    Compliance
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="audits"
-                >
-                    <span>◎</span>
-                    Audits
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="actions"
-                >
-                    <span>→</span>
-                    Actions
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="documents"
-                >
-                    <span>□</span>
-                    Documents
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="evidence"
-                >
-                    <span>▣</span>
-                    Evidence
-                </button>
-
-
-                <button
-                    class="nav-item"
-                    data-page="reports"
-                >
-                    <span>▤</span>
-                    Reports
-                </button>
-
-
-                <!-- ADMIN -->
-
-                <div
-                    id="adminNavigation"
-                    class="admin-navigation hidden"
-                >
-
-                    <div class="nav-section">
-                        Administration
-                    </div>
-
-
-                    <button
-                        class="nav-item"
-                        data-page="users"
-                    >
-                        <span>♙</span>
-                        Users
-                    </button>
-
-
-                    <button
-                        class="nav-item"
-                        data-page="auditlog"
-                    >
-                        <span>≡</span>
-                        Audit Log
-                    </button>
-
-                </div>
-
-            </nav>
-
-
-            <!-- SIDEBAR BOTTOM -->
-
-            <div class="sidebar-bottom">
-
-                <button
-                    id="logoutButton"
-                    class="logout-button"
-                >
-                    Sign Out
-                </button>
-
-            </div>
-
-        </aside>
-
-
-        <!-- MAIN -->
-
-        <main class="main-content">
-
-            <!-- TOPBAR -->
-
-            <header class="topbar">
-
-                <button
-                    id="mobileMenu"
-                    class="mobile-menu"
-                    type="button"
-                >
-                    ☰
-                </button>
-
-
-                <div class="topbar-title">
-
-                    <span id="pageTitle">
-                        Dashboard
-                    </span>
-
-                </div>
-
-
-                <div class="user-area">
-
-                    <div
-                        id="userName"
-                        class="user-name"
-                    >
-                        User
-                    </div>
-
-                    <div
-                        id="userRole"
-                        class="user-role"
-                    >
-                        USER
-                    </div>
-
-                </div>
-
-            </header>
-
-
-            <!-- PAGE CONTENT -->
-
-            <div
-                id="pageContent"
-                class="page-content"
-            ></div>
-
-        </main>
-
-    </section>
-
+    <div class="login-heading">
+      <h2>Welcome back</h2>
+      <p>Sign in to continue to the QMS system.</p>
+    </div>
+
+    <form id="loginForm" autocomplete="off">
+      <div class="form-group">
+        <label for="username">Username</label>
+        <input id="username" type="text" placeholder="Enter username"
+               autocomplete="username" required>
+      </div>
+
+      <div class="form-group">
+        <label for="password">Password</label>
+        <div class="password-wrapper">
+          <input id="password" type="password" placeholder="Enter password"
+                 autocomplete="current-password" required>
+          <button id="togglePassword" class="password-toggle" type="button">Show</button>
+        </div>
+      </div>
+
+      <div id="loginError" class="login-error"></div>
+
+      <button id="loginButton" class="login-button" type="submit">
+        <span id="loginButtonText">Sign In</span>
+        <span id="loginLoader" class="loader hidden"></span>
+      </button>
+    </form>
+
+    <div class="login-footer">
+      <span>GGL QMS Control Center</span>
+      <span id="loginVersion">Phase 1</span>
+    </div>
+  </div>
 </div>
 
+<div id="application" class="application hidden">
+  <aside id="sidebar" class="sidebar">
+    <div class="sidebar-brand">
+      <div class="brand-mark">GGL</div>
+      <div>
+        <strong>QMS</strong>
+        <span>CONTROL CENTER</span>
+      </div>
+    </div>
+
+    <nav id="navigation" class="navigation"></nav>
+
+    <div class="sidebar-bottom">
+      <div class="sidebar-user">
+        <div id="sidebarUserName">User</div>
+        <span id="sidebarUserRole">USER</span>
+      </div>
+      <button id="logoutButton" class="logout-button" type="button">Sign Out</button>
+    </div>
+  </aside>
+
+  <main class="main-content">
+    <header class="topbar">
+      <button id="mobileMenu" class="mobile-menu" type="button">☰</button>
+      <div class="topbar-title">
+        <span id="pageTitle">Dashboard</span>
+      </div>
+      <div class="user-area">
+        <div id="userName" class="user-name">User</div>
+        <div id="userRole" class="user-role">USER</div>
+      </div>
+    </header>
+
+    <section id="pageContent" class="page-content"></section>
+  </main>
+</div>
+
+<div id="toastContainer" class="toast-container"></div>
 
 <script src="app.js"></script>
-
 </body>
-
 </html>
