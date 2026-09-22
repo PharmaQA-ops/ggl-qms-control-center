@@ -1,99 +1,12 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="theme-color" content="#101827">
-  <title>GGL QMS Control Center</title>
-  <link rel="stylesheet" href="style.css">
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>GGL QMS Control Center</title>
+<link rel="icon" type="image/png" href="https://raw.githubusercontent.com/PharmaQA-ops/ggl-main-dashboard/main/logo.png">
+<link rel="stylesheet" href="style.css">
 </head>
 <body>
-
-<div id="loginPage" class="login-page">
-  <div class="login-card">
-    <div class="brand">
-      <div class="brand-mark">GGL</div>
-      <div>
-        <h1>QMS CONTROL CENTER</h1>
-        <p>Quality Management System</p>
-      </div>
-    </div>
-
-    <div class="login-heading">
-      <h2>Welcome back</h2>
-      <p>Sign in to continue to the QMS system.</p>
-    </div>
-
-    <form id="loginForm" autocomplete="off">
-      <div class="form-group">
-        <label for="username">Username</label>
-        <input id="username" type="text" placeholder="Enter username"
-               autocomplete="username" required>
-      </div>
-
-      <div class="form-group">
-        <label for="password">Password</label>
-        <div class="password-wrapper">
-          <input id="password" type="password" placeholder="Enter password"
-                 autocomplete="current-password" required>
-          <button id="togglePassword" class="password-toggle" type="button">Show</button>
-        </div>
-      </div>
-
-      <div id="loginError" class="login-error"></div>
-
-      <button id="loginButton" class="login-button" type="submit">
-        <span id="loginButtonText">Sign In</span>
-        <span id="loginLoader" class="loader hidden"></span>
-      </button>
-    </form>
-
-    <div class="login-footer">
-      <span>GGL QMS Control Center</span>
-      <span id="loginVersion">Phase 1</span>
-    </div>
-  </div>
-</div>
-
-<div id="application" class="application hidden">
-  <aside id="sidebar" class="sidebar">
-    <div class="sidebar-brand">
-      <div class="brand-mark">GGL</div>
-      <div>
-        <strong>QMS</strong>
-        <span>CONTROL CENTER</span>
-      </div>
-    </div>
-
-    <nav id="navigation" class="navigation"></nav>
-
-    <div class="sidebar-bottom">
-      <div class="sidebar-user">
-        <div id="sidebarUserName">User</div>
-        <span id="sidebarUserRole">USER</span>
-      </div>
-      <button id="logoutButton" class="logout-button" type="button">Sign Out</button>
-    </div>
-  </aside>
-
-  <main class="main-content">
-    <header class="topbar">
-      <button id="mobileMenu" class="mobile-menu" type="button">☰</button>
-      <div class="topbar-title">
-        <span id="pageTitle">Dashboard</span>
-      </div>
-      <div class="user-area">
-        <div id="userName" class="user-name">User</div>
-        <div id="userRole" class="user-role">USER</div>
-      </div>
-    </header>
-
-    <section id="pageContent" class="page-content"></section>
-  </main>
-</div>
-
-<div id="toastContainer" class="toast-container"></div>
-
-<script src="app.js"></script>
-</body>
-</html>
+<div id="app"><aside><div class="sidebrand"><img src="https://raw.githubusercontent.com/PharmaQA-ops/ggl-main-dashboard/main/logo.png" alt="GGL"><span>QMS CONTROL<small>Production</small></span></div><nav id="nav"></nav><div class="sidefoot"><span id="who">Main Dashboard</span><button id="backDashboard">Back to Dashboard</button></div></aside><main><header><button id="menu">☰</button><div><b id="title">Dashboard</b><small>GGL QMS Control Center</small></div></header><section id="content"></section></main></div><div id="modal"></div><div id="toast"></div>
+<script>window.QMS_CONFIG={API_URL:'https://script.google.com/macros/s/AKfycbwnmtkqrVmggRbZnJserN_y5DwB4BPQ96oeCyoqbvXGBevmdGpqCh3TkVSDE8g6-2Kyrw/exec',ASSET_BASE:'https://raw.githubusercontent.com/PharmaQA-ops/ggl-main-dashboard/main/'};</script><script src="app.js"></script>
+</body></html>
