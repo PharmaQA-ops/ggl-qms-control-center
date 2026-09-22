@@ -2592,3 +2592,130 @@ async function resetPassword() {
     btn.textContent = "Reset Password";
   }
 }
+async function downloadReportFile(
+  fileId,
+  fileName
+) {
+
+  if (!fileId) {
+    showToast(
+      'Report file is unavailable.',
+      'error'
+    );
+    return;
+  }
+
+  try {
+
+    showToast(
+      'Preparing ' + fileName + '...',
+      'info'
+    );
+
+    const response =
+      await apiRequest(
+        'DOWNLOAD_REPORT',
+        {
+          fileId: fileId
+        }
+      );
+
+    if (
+      !response ||
+      !response.success ||
+      !response.base64
+    ) {
+      throw new Error(
+        response?.error ||
+        'DOWNLOAD_FAILED'
+      );
+    }
+
+    /*
+     * Base64 → binary
+     */
+    const binary =
+      atob(
+        response.base64
+      );
+
+    const len =
+      binary.length;
+
+    const bytes =
+      new Uint8Array(len);
+
+    for (
+      let i = 0;
+      i < len;
+      i++
+    ) {
+      bytes[i] =
+        binary.charCodeAt(i);
+    }
+
+    const blob =
+      new Blob(
+        [bytes],
+        {
+          type:
+            response.mimeType ||
+            'application/octet-stream'
+        }
+      );
+
+    const url =
+      URL.createObjectURL(
+        blob
+      );
+
+    const anchor =
+      document.createElement(
+        'a'
+      );
+
+    anchor.href = url;
+
+    anchor.download =
+      response.fileName ||
+      fileName ||
+      'QMS_Report';
+
+    document.body.appendChild(
+      anchor
+    );
+
+    anchor.click();
+
+    anchor.remove();
+
+    setTimeout(
+      () => {
+        URL.revokeObjectURL(
+          url
+        );
+      },
+      1000
+    );
+
+    showToast(
+      'Download started.',
+      'success'
+    );
+
+  } catch (error) {
+
+    console.error(
+      '[REPORT DOWNLOAD]',
+      error
+    );
+
+    showToast(
+      'Download failed: ' +
+      error.message,
+      'error'
+    );
+
+  }
+
+}
