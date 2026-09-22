@@ -335,6 +335,7 @@ function navigate(page) {
 
   switch (page) {
     case "dashboard": loadDashboard(); break;
+    case "documents": loadDocuments(); break;
     case "users": loadUsers(); break;
     case "auditlog": loadAuditLog(); break;
     default: renderFoundationPlaceholder(page, labels[page] || "QMS Module");
@@ -427,6 +428,365 @@ function renderDashboard(status) {
 
 function foundationCard(title, text) {
   return `<div class="module-card"><strong>${escapeHtml(title)}</strong><span>${escapeHtml(text)}</span></div>`;
+}
+
+
+/* =========================================================
+   PHASE 2 — DOCUMENT CONTROL
+   ========================================================= */
+
+let documentMasterData = {
+  documentTypes: [
+    "POLICY", "SOP", "WORK_INSTRUCTION", "FORM",
+    "TEMPLATE", "MANUAL", "GUIDELINE", "RECORD",
+    "EXTERNAL_DOCUMENT"
+  ],
+  categories: [
+    "QUALITY", "COMPLIANCE", "OPERATIONS", "SAFETY",
+    "SECURITY", "HR", "IT", "TRAINING", "CUSTOMER", "SUPPLIER"
+  ],
+  statuses: [
+    "DRAFT", "UNDER_REVIEW", "APPROVED",
+    "EFFECTIVE", "OBSOLETE", "ARCHIVED"
+  ],
+  classifications: ["INTERNAL", "CONFIDENTIAL", "RESTRICTED"],
+  reviewFrequencies: ["ANNUAL", "BIENNIAL", "TRIENNIAL", "AS_REQUIRED"]
+};
+
+async function loadDocuments() {
+  renderLoading("Loading document control...");
+
+  try {
+    const master = await apiRequest({
+      action: "DOCUMENT_MASTER",
+      token: App.token
+    });
+
+    if (master?.success) {
+      documentMasterData = master;
+    }
+
+    const response = await apiRequest({
+      action: "LIST",
+      module: "DOCUMENTS",
+      token: App.token
+    });
+
+    if (!response.success) {
+      handleApiError(response);
+      return;
+    }
+
+    renderDocuments(response.records || []);
+  } catch (error) {
+    console.error(error);
+    renderError("Unable to load Document Control.");
+  }
+}
+
+function selectOptions(values, selected = "") {
+  return (values || []).map(function(value) {
+    const safe = escapeHtml(value);
+    return `<option value="${safe}" ${String(value) === String(selected) ? "selected" : ""}>${safe}</option>`;
+  }).join("");
+}
+
+function renderDocuments(records) {
+
+  const active = records.filter(r =>
+    !["OBSOLETE", "ARCHIVED"].includes(
+      String(r["Status"] || "").toUpperCase()
+    )
+  ).length;
+
+  const effective = records.filter(r =>
+    String(r["Status"] || "").toUpperCase() === "EFFECTIVE"
+  ).length;
+
+  const reviewDue = records.filter(r => {
+    const date = new Date(r["Review Date"]);
+    return !isNaN(date.getTime()) && date < new Date();
+  }).length;
+
+  DOM.pageContent.innerHTML = `
+    <div class="page-header">
+      <div>
+        <h1>Document Control</h1>
+        <p>Controlled register for QMS documents, revisions, ownership and review dates.</p>
+      </div>
+      ${hasPermission("DOCUMENT.CREATE") || App.permissions.includes("*")
+        ? `<button class="primary-button" id="newDocumentBtn">+ New Document</button>`
+        : ""}
+    </div>
+
+    <div class="stat-grid">
+      <div class="stat-card"><span>Total Documents</span><strong>${records.length}</strong></div>
+      <div class="stat-card"><span>Active Documents</span><strong>${active}</strong></div>
+      <div class="stat-card"><span>Effective</span><strong>${effective}</strong></div>
+      <div class="stat-card"><span>Review Due</span><strong>${reviewDue}</strong></div>
+    </div>
+
+    <div class="panel">
+      <div class="panel-header">
+        <div>
+          <div class="panel-title">Controlled Document Register</div>
+          <div class="panel-subtitle">Document ID, revision, version, status and ownership.</div>
+        </div>
+        <input id="documentSearch" class="table-search" placeholder="Search documents...">
+      </div>
+
+      <div class="table-wrap">
+        <table class="qms-table">
+          <thead>
+            <tr>
+              <th>Document ID</th>
+              <th>Document Name</th>
+              <th>Type</th>
+              <th>Category</th>
+              <th>Revision</th>
+              <th>Version</th>
+              <th>Status</th>
+              <th>Owner</th>
+              <th>Review Date</th>
+              <th>File</th>
+            </tr>
+          </thead>
+          <tbody id="documentTableBody">
+            ${renderDocumentRows(records)}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+
+  document.getElementById("newDocumentBtn")?.addEventListener(
+    "click",
+    () => openDocumentModal()
+  );
+
+  document.getElementById("documentSearch")?.addEventListener(
+    "input",
+    function() {
+      const term = this.value.toLowerCase();
+      const filtered = records.filter(r =>
+        Object.values(r).some(v =>
+          String(v ?? "").toLowerCase().includes(term)
+        )
+      );
+      document.getElementById("documentTableBody").innerHTML =
+        renderDocumentRows(filtered);
+    }
+  );
+}
+
+function renderDocumentRows(records) {
+  if (!records.length) {
+    return `<tr><td colspan="10" class="table-empty">No controlled documents found.</td></tr>`;
+  }
+
+  return records.map(function(r) {
+    const url = String(r["Drive URL"] || "").trim();
+    const status = String(r["Status"] || "DRAFT").toUpperCase();
+
+    return `
+      <tr>
+        <td><strong>${escapeHtml(r["Document ID"] || "")}</strong></td>
+        <td>${escapeHtml(r["Document Name"] || "")}</td>
+        <td>${escapeHtml(r["Document Type"] || "")}</td>
+        <td>${escapeHtml(r["Category"] || "")}</td>
+        <td>${escapeHtml(r["Revision"] || "")}</td>
+        <td>${escapeHtml(r["Version"] || "")}</td>
+        <td><span class="status-badge">${escapeHtml(status)}</span></td>
+        <td>${escapeHtml(r["Owner"] || "")}</td>
+        <td>${formatDateTime(r["Review Date"])}</td>
+        <td>${url ? `<a class="table-link" href="${escapeHtml(url)}" target="_blank" rel="noopener">Open</a>` : "—"}</td>
+      </tr>
+    `;
+  }).join("");
+}
+
+function openDocumentModal() {
+
+  const modal = document.createElement("div");
+  modal.className = "modal-overlay";
+  modal.id = "documentModal";
+
+  modal.innerHTML = `
+    <div class="modal-card qms-document-modal">
+      <div class="modal-header">
+        <div>
+          <h2>Register Controlled Document</h2>
+          <p>Phase 2 Document Control register entry.</p>
+        </div>
+        <button class="modal-close" id="closeDocumentModal">×</button>
+      </div>
+
+      <form id="documentForm" class="document-form">
+
+        <div class="form-grid-2">
+          <label>
+            Document Name *
+            <input name="Document Name" required>
+          </label>
+
+          <label>
+            Document Type *
+            <select name="Document Type" required>
+              <option value="">Select</option>
+              ${selectOptions(documentMasterData.documentTypes)}
+            </select>
+          </label>
+
+          <label>
+            Category *
+            <select name="Category" required>
+              <option value="">Select</option>
+              ${selectOptions(documentMasterData.categories)}
+            </select>
+          </label>
+
+          <label>
+            Revision
+            <input name="Revision" value="00">
+          </label>
+
+          <label>
+            Version
+            <input name="Version" value="1.0">
+          </label>
+
+          <label>
+            Status
+            <select name="Status">
+              ${selectOptions(documentMasterData.statuses, "DRAFT")}
+            </select>
+          </label>
+
+          <label>
+            Effective Date
+            <input name="Effective Date" type="date">
+          </label>
+
+          <label>
+            Review Date
+            <input name="Review Date" type="date">
+          </label>
+
+          <label>
+            Owner
+            <input name="Owner">
+          </label>
+
+          <label>
+            Department
+            <input name="Department">
+          </label>
+
+          <label>
+            Classification
+            <select name="Classification">
+              ${selectOptions(documentMasterData.classifications, "INTERNAL")}
+            </select>
+          </label>
+
+          <label>
+            Related Module
+            <input name="Related Module" placeholder="CAPA / COMPLAINTS / AUDITS...">
+          </label>
+
+          <label class="full-width">
+            Related Record ID
+            <input name="Related Record ID">
+          </label>
+
+          <label class="full-width">
+            Description
+            <textarea name="Description" rows="4"></textarea>
+          </label>
+
+          <label class="full-width">
+            Drive File ID
+            <input name="Drive File ID" placeholder="Optional — populate after file upload">
+          </label>
+
+          <label class="full-width">
+            Drive URL
+            <input name="Drive URL" type="url" placeholder="Optional">
+          </label>
+
+        </div>
+
+        <div class="modal-actions">
+          <button type="button" class="secondary-button" id="cancelDocumentBtn">Cancel</button>
+          <button type="submit" class="primary-button" id="saveDocumentBtn">Register Document</button>
+        </div>
+      </form>
+    </div>
+  `;
+
+  document.body.appendChild(modal);
+
+  document.getElementById("closeDocumentModal").onclick = closeDocumentModal;
+  document.getElementById("cancelDocumentBtn").onclick = closeDocumentModal;
+
+  document.getElementById("documentForm").addEventListener(
+    "submit",
+    saveDocument
+  );
+}
+
+function closeDocumentModal() {
+  document.getElementById("documentModal")?.remove();
+}
+
+async function saveDocument(event) {
+
+  event.preventDefault();
+
+  const form = event.currentTarget;
+  const record = {};
+
+  new FormData(form).forEach(function(value, key) {
+    record[key] = value;
+  });
+
+  const button = document.getElementById("saveDocumentBtn");
+  button.disabled = true;
+  button.textContent = "Registering...";
+
+  try {
+
+    const response = await apiRequest({
+      action: "CREATE",
+      module: "DOCUMENTS",
+      record: record,
+      token: App.token
+    });
+
+    if (!response.success) {
+      handleApiError(response);
+      return;
+    }
+
+    closeDocumentModal();
+    showToast(
+      `Document ${response.recordId || ""} registered successfully.`,
+      "success"
+    );
+
+    loadDocuments();
+
+  } catch (error) {
+
+    console.error(error);
+    showToast("Unable to register document.", "error");
+
+  } finally {
+
+    button.disabled = false;
+    button.textContent = "Register Document";
+
+  }
 }
 
 function renderFoundationPlaceholder(page, title) {
@@ -801,3 +1161,7 @@ window.QMS = {
   loadUsers,
   loadAuditLog
 };
+
+window.loadDocuments = loadDocuments;
+window.openDocumentModal = openDocumentModal;
+window.closeDocumentModal = closeDocumentModal;
