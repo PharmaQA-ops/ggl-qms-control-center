@@ -1,1952 +1,2594 @@
-/* =========================================================
+"use strict";
+
+/* =====================================================
    GGL QMS CONTROL CENTER
-   FINAL FRONTEND SCRIPT
-   LOGIN + SESSION + RBAC + DASHBOARD + MODULES + CRUD
-   FILES + REPORTS + AUDIT LOG
-   ========================================================= */
+   FRONTEND APPLICATION
+   ===================================================== */
+
+
+/* =====================================================
+   API CONFIGURATION
+   ===================================================== */
 
 const API_URL =
-  "https://script.google.com/macros/s/AKfycbwnmtkqrVmggRbZnJserN_y5DwB4BPQ96oeCyoqbvXGBevmdGpqCh3TkVSDE8g6-2Kyrw/exec";
+    "https://script.google.com/macros/s/AKfycbwnmtkqrVmggRbZnJserN_y5DwB4BPQ96oeCyoqbvXGBevmdGpqCh3TkVSDE8g6-2Kyrw/exec";
 
-let currentUser = null;
-let sessionToken = null;
-let currentModule = "dashboard";
-let currentRecordId = null;
 
-const STORAGE_TOKEN = "GGL_QMS_TOKEN";
-const STORAGE_USER = "GGL_QMS_USER";
+/* =====================================================
+   APPLICATION STATE
+   ===================================================== */
 
-const MODULE_MAP = {
-  dashboard: "DASHBOARD",
-  capa: "CAPA",
-  complaints: "COMPLAINTS",
-  compliance: "COMPLIANCE",
-  audits: "AUDITS",
-  actions: "ACTIONS",
-  documents: "DOCUMENTS",
-  evidence: "EVIDENCE",
-  reports: "REPORTS",
-  users: "USERS",
-  auditlog: "AUDIT_LOG"
+const App = {
+
+    token: null,
+
+    user: null,
+
+    currentPage: "dashboard",
+
+    initialized: false
+
 };
 
-const PAGE_TITLES = {
-  dashboard: "Dashboard",
-  capa: "CAPA Management",
-  complaints: "Complaints",
-  compliance: "Compliance",
-  audits: "Audits",
-  actions: "Actions",
-  documents: "Documents",
-  evidence: "Evidence",
-  reports: "Reports",
-  users: "User Administration",
-  auditlog: "Audit Log"
+
+/* =====================================================
+   DOM
+   ===================================================== */
+
+const DOM = {
+
+    loginPage:
+        document.getElementById("loginPage"),
+
+    application:
+        document.getElementById("application"),
+
+    loginForm:
+        document.getElementById("loginForm"),
+
+    username:
+        document.getElementById("username"),
+
+    password:
+        document.getElementById("password"),
+
+    loginButton:
+        document.getElementById("loginButton"),
+
+    loginButtonText:
+        document.getElementById("loginButtonText"),
+
+    loginLoader:
+        document.getElementById("loginLoader"),
+
+    loginError:
+        document.getElementById("loginError"),
+
+    togglePassword:
+        document.getElementById("togglePassword"),
+
+    logoutButton:
+        document.getElementById("logoutButton"),
+
+    adminNavigation:
+        document.getElementById("adminNavigation"),
+
+    userName:
+        document.getElementById("userName"),
+
+    userRole:
+        document.getElementById("userRole"),
+
+    pageTitle:
+        document.getElementById("pageTitle"),
+
+    pageContent:
+        document.getElementById("pageContent"),
+
+    mobileMenu:
+        document.getElementById("mobileMenu"),
+
+    sidebar:
+        document.getElementById("sidebar")
+
 };
 
-/* =========================================================
-   INIT
-   ========================================================= */
 
-document.addEventListener("DOMContentLoaded", init);
+/* =====================================================
+   INITIALIZATION
+   ===================================================== */
 
-function init() {
-  restoreSession();
-  setupLoginForm();
-  setupForgotPassword();
-  setupNavigation();
-  setupLogout();
-  setupPasswordToggle();
-  setupMobileMenu();
+document.addEventListener(
+    "DOMContentLoaded",
+    init
+);
 
-  if (sessionToken && currentUser) {
-    showApp();
-    loadDashboard();
-  } else {
-    showLogin();
-  }
 
-  console.log("GGL QMS CONTROL CENTER JS LOADED");
-  console.log("API:", API_URL);
+async function init() {
+
+    bindEvents();
+
+    restoreSession();
+
 }
 
-/* =========================================================
-   SESSION
-   ========================================================= */
 
-function restoreSession() {
-  try {
-    const token = localStorage.getItem(STORAGE_TOKEN);
-    const user = localStorage.getItem(STORAGE_USER);
+/* =====================================================
+   EVENTS
+   ===================================================== */
 
-    if (token && user) {
-      const parsed = JSON.parse(user);
+function bindEvents() {
 
-      if (parsed && parsed.userId && parsed.username) {
-        sessionToken = token;
-        currentUser = parsed;
-      } else {
-        clearSession();
-      }
-    }
-  } catch (error) {
-    console.error("SESSION RESTORE ERROR:", error);
-    clearSession();
-  }
-}
+    if (DOM.loginForm) {
 
-function saveSession(token, user) {
-  sessionToken = token;
-  currentUser = user;
+        DOM.loginForm.addEventListener(
+            "submit",
+            handleLogin
+        );
 
-  localStorage.setItem(STORAGE_TOKEN, token);
-  localStorage.setItem(STORAGE_USER, JSON.stringify(user));
-}
-
-function clearSession() {
-  sessionToken = null;
-  currentUser = null;
-  localStorage.removeItem(STORAGE_TOKEN);
-  localStorage.removeItem(STORAGE_USER);
-}
-
-/* =========================================================
-   API
-   ========================================================= */
-
-async function apiRequest(action, data = {}) {
-  const payload = {
-    action,
-    ...data
-  };
-
-  if (sessionToken && action !== "LOGIN") {
-    payload.token = sessionToken;
-  }
-
-  console.log("QMS API REQUEST:", payload);
-
-  try {
-    const response = await fetch(API_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "text/plain;charset=utf-8"
-      },
-      body: JSON.stringify(payload)
-    });
-
-    const raw = await response.text();
-
-    console.log("QMS API HTTP STATUS:", response.status);
-    console.log("QMS API RAW RESPONSE:", raw);
-
-    let result;
-
-    try {
-      result = JSON.parse(raw);
-    } catch (error) {
-      console.error("JSON PARSE ERROR:", error);
-      return {
-        success: false,
-        error: "INVALID_API_RESPONSE",
-        raw
-      };
     }
 
-    console.log("QMS API RESPONSE:", result);
 
-    if (
-      result &&
-      ["SESSION_EXPIRED", "INVALID_SESSION", "UNAUTHORIZED"]
-        .includes(String(result.error || "").toUpperCase())
-    ) {
-      handleSessionExpired();
+    if (DOM.togglePassword) {
+
+        DOM.togglePassword.addEventListener(
+            "click",
+            togglePassword
+        );
+
     }
 
-    return result;
-  } catch (error) {
-    console.error("QMS API NETWORK ERROR:", error);
 
-    return {
-      success: false,
-      error: "NETWORK_ERROR",
-      message: error.message
-    };
-  }
+    if (DOM.logoutButton) {
+
+        DOM.logoutButton.addEventListener(
+            "click",
+            handleLogout
+        );
+
+    }
+
+
+    document
+        .querySelectorAll(".nav-item")
+        .forEach(button => {
+
+            button.addEventListener(
+                "click",
+                () => {
+
+                    const page =
+                        button.dataset.page;
+
+                    if (page) {
+
+                        navigate(page);
+
+                    }
+
+                }
+            );
+
+        });
+
+
+    if (DOM.mobileMenu) {
+
+        DOM.mobileMenu.addEventListener(
+            "click",
+            () => {
+
+                DOM.sidebar.classList.toggle(
+                    "mobile-open"
+                );
+
+            }
+        );
+
+    }
+
 }
 
-/* =========================================================
+
+/* =====================================================
    LOGIN
-   ========================================================= */
+   ===================================================== */
 
-function setupLoginForm() {
-  const form = document.getElementById("loginForm");
-  if (!form) return;
+async function handleLogin(event) {
 
-  form.addEventListener("submit", async event => {
     event.preventDefault();
-
-    const username = document.getElementById("username")?.value.trim() || "";
-    const password = document.getElementById("password")?.value || "";
 
     clearLoginError();
 
-    if (!username || !password) {
-      showLoginError("Please enter username and password.");
-      return;
+    const username =
+        DOM.username.value.trim();
+
+    const password =
+        DOM.password.value;
+
+    if (!username) {
+
+        showLoginError(
+            "Please enter your username."
+        );
+
+        return;
+
+    }
+
+    if (!password) {
+
+        showLoginError(
+            "Please enter your password."
+        );
+
+        return;
+
     }
 
     setLoginLoading(true);
 
     try {
-      const result = await apiRequest("LOGIN", {
-        username,
-        password
-      });
 
-      console.log("LOGIN RESULT:", result);
+        const response =
+            await apiRequest({
+                action: "LOGIN",
+                username: username,
+                password: password
+            });
 
-      if (!result || !result.success) {
-        showLoginError(getFriendlyError(result));
-        return;
-      }
+        if (!response.success) {
 
-      if (!result.token || !result.user) {
-        showLoginError("Login response is incomplete.");
-        return;
-      }
+            showLoginError(
+                getReadableError(
+                    response.error
+                )
+            );
 
-      saveSession(result.token, result.user);
+            return;
 
-      document.getElementById("password").value = "";
+        }
 
-      showApp();
-      await loadDashboard();
+        App.token =
+            response.token;
 
-      showMessage("Login successful.", "success");
+        App.user =
+            response.user;
+
+        saveSession();
+
+        showApplication();
+
+        await loadDashboard();
+
+    } catch (error) {
+
+        console.error(error);
+
+        showLoginError(
+            "Unable to connect to the QMS server."
+        );
+
     } finally {
-      setLoginLoading(false);
+
+        setLoginLoading(false);
+
     }
-  });
+
 }
 
-function setLoginLoading(loading) {
-  const button = document.getElementById("loginButton");
-  const text = document.getElementById("loginButtonText");
-  const loader = document.getElementById("loginLoader");
 
-  if (button) button.disabled = loading;
-  if (text) text.textContent = loading ? "Signing in..." : "Sign In";
-  if (loader) loader.classList.toggle("hidden", !loading);
+/* =====================================================
+   LOGOUT
+   ===================================================== */
+
+async function handleLogout() {
+
+    try {
+
+        if (App.token) {
+
+            await apiRequest({
+                action: "LOGOUT",
+                token: App.token
+            });
+
+        }
+
+    } catch (error) {
+
+        console.warn(
+            "Logout API error:",
+            error
+        );
+
+    }
+
+    clearSession();
+
+    showLogin();
+
 }
 
-function showLoginError(message) {
-  const el = document.getElementById("loginError");
-  if (el) el.textContent = message || "";
+
+/* =====================================================
+   SESSION STORAGE
+   ===================================================== */
+
+function saveSession() {
+
+    localStorage.setItem(
+        "GGL_QMS_TOKEN",
+        App.token
+    );
+
+    localStorage.setItem(
+        "GGL_QMS_USER",
+        JSON.stringify(
+            App.user
+        )
+    );
+
 }
 
-function clearLoginError() {
-  showLoginError("");
+
+function restoreSession() {
+
+    const token =
+        localStorage.getItem(
+            "GGL_QMS_TOKEN"
+        );
+
+    const user =
+        localStorage.getItem(
+            "GGL_QMS_USER"
+        );
+
+    if (!token || !user) {
+
+        showLogin();
+
+        return;
+
+    }
+
+    try {
+
+        App.token =
+            token;
+
+        App.user =
+            JSON.parse(user);
+
+        verifySession();
+
+    } catch (error) {
+
+        console.error(error);
+
+        clearSession();
+
+        showLogin();
+
+    }
+
 }
 
-/* =========================================================
-   PASSWORD TOGGLE
-   ========================================================= */
 
-function setupPasswordToggle() {
-  const button = document.getElementById("togglePassword");
-  const input = document.getElementById("password");
+async function verifySession() {
 
-  if (!button || !input) return;
+    try {
 
-  button.addEventListener("click", () => {
-    const visible = input.type === "text";
-    input.type = visible ? "password" : "text";
-    button.textContent = visible ? "Show" : "Hide";
-  });
+        const response =
+            await apiRequest({
+                action: "ME",
+                token: App.token
+            });
+
+        if (
+            !response.success ||
+            !response.user
+        ) {
+
+            clearSession();
+
+            showLogin();
+
+            return;
+
+        }
+
+        App.user =
+            response.user;
+
+        saveSession();
+
+        showApplication();
+
+        await loadDashboard();
+
+    } catch (error) {
+
+        console.error(error);
+
+        clearSession();
+
+        showLogin();
+
+    }
+
 }
 
-/* =========================================================
-   APP / LOGIN VIEW
-   ========================================================= */
 
-function showApp() {
-  const login = document.getElementById("loginPage");
-  const application = document.getElementById("application");
+/* =====================================================
+   API REQUEST
+   ===================================================== */
 
-  if (login) login.style.display = "none";
+async function apiRequest(payload) {
 
-  if (application) {
-    application.classList.remove("hidden");
-    application.style.display = "";
-  }
+    const response =
+        await fetch(
+            API_URL,
+            {
 
-  // Always ensure the logout control exists after entering the application.
-  setupLogout();
-  updateUserInterface();
+                method: "POST",
+
+                headers: {
+
+                    "Content-Type":
+                        "text/plain;charset=utf-8"
+
+                },
+
+                body:
+                    JSON.stringify(
+                        payload
+                    )
+
+            }
+        );
+
+    if (!response.ok) {
+
+        throw new Error(
+            "HTTP_" +
+            response.status
+        );
+
+    }
+
+    return await response.json();
+
 }
+
+
+/* =====================================================
+   APPLICATION DISPLAY
+   ===================================================== */
+
+function showApplication() {
+
+    DOM.loginPage.classList.add(
+        "hidden"
+    );
+
+    DOM.application.classList.remove(
+        "hidden"
+    );
+
+    updateUserInterface();
+
+}
+
 
 function showLogin() {
-  const login = document.getElementById("loginPage");
-  const application = document.getElementById("application");
 
-  if (application) {
-    application.classList.add("hidden");
-    application.style.display = "none";
-  }
+    DOM.application.classList.add(
+        "hidden"
+    );
 
-  if (login) {
-    login.style.display = "";
-  }
+    DOM.loginPage.classList.remove(
+        "hidden"
+    );
+
+    DOM.username.value = "";
+
+    DOM.password.value = "";
+
+    clearLoginError();
+
 }
+
 
 function updateUserInterface() {
-  if (!currentUser) return;
 
-  setText("userName", currentUser.name || currentUser.username || "User");
-  setText("userRole", currentUser.role || "USER");
+    if (!App.user)
+        return;
 
-  const adminNavigation = document.getElementById("adminNavigation");
+    DOM.userName.textContent =
+        App.user.name ||
+        App.user.username ||
+        "User";
 
-  if (adminNavigation) {
-    adminNavigation.classList.toggle("hidden", !isAdmin());
-    adminNavigation.style.display = isAdmin() ? "" : "none";
-  }
+    DOM.userRole.textContent =
+        App.user.role ||
+        "USER";
 
-  applyRBAC();
-}
 
-function applyRBAC() {
-  document.querySelectorAll("[data-admin-only]").forEach(element => {
-    element.style.display = isAdmin() ? "" : "none";
-  });
+    /*
+     * Admin-only navigation
+     */
 
-  document.querySelectorAll("[data-user-only]").forEach(element => {
-    element.style.display = !isAdmin() ? "" : "none";
-  });
-}
+    const role =
+        String(
+            App.user.role || ""
+        ).toUpperCase();
 
-/* =========================================================
-   LOGOUT
-   ========================================================= */
+    if (
+        role === "ADMIN"
+    ) {
 
-function setupLogout() {
-  let button = document.getElementById("logoutButton");
+        DOM.adminNavigation
+            .classList.remove(
+                "hidden"
+            );
 
-  // Bind the logout button already present in index.html.
-  if (button) {
-    button.type = "button";
-    button.removeEventListener("click", logout);
-    button.addEventListener("click", logout);
-  }
+    } else {
 
-  // Support any legacy/custom logout controls.
-  document.querySelectorAll(
-    "#logoutBtn, [data-action='logout'], [data-page='logout']"
-  ).forEach(element => {
-    element.removeEventListener("click", logout);
-    element.addEventListener("click", logout);
-  });
+        DOM.adminNavigation
+            .classList.add(
+                "hidden"
+            );
 
-  // Safety fallback: create a logout button if the HTML does not contain one.
-  if (!button) {
-    const sidebarBottom = document.querySelector(".sidebar-bottom");
-    const application = document.getElementById("application");
-
-    if (sidebarBottom) {
-      button = document.createElement("button");
-      button.id = "logoutButton";
-      button.type = "button";
-      button.className = "logout-button";
-      button.textContent = "Sign Out";
-      button.addEventListener("click", logout);
-      sidebarBottom.appendChild(button);
-    } else if (application) {
-      button = document.createElement("button");
-      button.id = "logoutButton";
-      button.type = "button";
-      button.className = "logout-button qms-floating-logout";
-      button.textContent = "Sign Out";
-      button.addEventListener("click", logout);
-      application.appendChild(button);
     }
-  }
+
 }
 
-async function logout() {
-  try {
-    if (sessionToken) {
-      await apiRequest("LOGOUT");
-    }
-  } catch (error) {
-    console.warn("LOGOUT ERROR:", error);
-  }
 
-  clearSession();
-  currentModule = "dashboard";
-  currentRecordId = null;
-  showLogin();
-}
-
-/* =========================================================
-   SESSION EXPIRED
-   ========================================================= */
-
-function handleSessionExpired() {
-  clearSession();
-  showLogin();
-  showMessage("Your session has expired. Please login again.", "error");
-}
-
-/* =========================================================
+/* =====================================================
    NAVIGATION
-   ========================================================= */
+   ===================================================== */
 
-function setupNavigation() {
-  document.querySelectorAll(".nav-item[data-page]").forEach(button => {
-    button.addEventListener("click", () => {
-      const page = button.dataset.page;
-      openModule(page);
-    });
-  });
+async function navigate(page) {
+
+    App.currentPage =
+        page;
+
+    document
+        .querySelectorAll(
+            ".nav-item"
+        )
+        .forEach(button => {
+
+            button.classList.toggle(
+                "active",
+                button.dataset.page === page
+            );
+
+        });
+
+
+    const titles = {
+
+        dashboard:
+            "Dashboard",
+
+        capa:
+            "CAPA",
+
+        complaints:
+            "Complaints",
+
+        compliance:
+            "Compliance",
+
+        audits:
+            "Audits",
+
+        actions:
+            "Actions",
+
+        documents:
+            "Documents",
+
+        evidence:
+            "Evidence",
+
+        reports:
+            "Reports",
+
+        users:
+            "Users",
+
+        auditlog:
+            "Audit Log"
+
+    };
+
+
+    DOM.pageTitle.textContent =
+        titles[page] ||
+        "QMS";
+
+
+    /*
+     * Close mobile sidebar
+     */
+
+    if (
+        DOM.sidebar
+    ) {
+
+        DOM.sidebar.classList.remove(
+            "mobile-open"
+        );
+
+    }
+
+
+    switch (page) {
+
+        case "dashboard":
+
+            await loadDashboard();
+
+            break;
+
+
+        case "capa":
+
+            renderModulePlaceholder(
+                "CAPA",
+                "CAPA management will be connected next."
+            );
+
+            break;
+
+
+        case "complaints":
+
+            renderModulePlaceholder(
+                "Complaints",
+                "Complaint management will be connected next."
+            );
+
+            break;
+
+
+        case "compliance":
+
+            renderModulePlaceholder(
+                "Compliance",
+                "Compliance register will be connected next."
+            );
+
+            break;
+
+
+        case "audits":
+
+            renderModulePlaceholder(
+                "Audits",
+                "Audit management will be connected next."
+            );
+
+            break;
+
+
+        case "actions":
+
+            renderModulePlaceholder(
+                "Actions",
+                "Action management will be connected next."
+            );
+
+            break;
+
+
+        case "documents":
+
+            renderModulePlaceholder(
+                "Documents",
+                "Document management will be connected next."
+            );
+
+            break;
+
+
+        case "evidence":
+
+            renderModulePlaceholder(
+                "Evidence",
+                "Evidence management will be connected next."
+            );
+
+            break;
+
+
+        case "reports":
+
+            await loadReports();
+
+            break;
+
+
+        case "users":
+
+            if (
+                hasRole(
+                    ["ADMIN"]
+                )
+            ) {
+
+                await loadUsers();
+
+            } else {
+
+                showAccessDenied();
+
+            }
+
+            break;
+
+
+        case "auditlog":
+
+            if (
+                hasRole(
+                    ["ADMIN"]
+                )
+            ) {
+
+                loadAuditLog();
+
+            } else {
+
+                showAccessDenied();
+
+            }
+
+            break;
+
+
+        default:
+
+            await loadDashboard();
+
+    }
+
 }
 
-async function openModule(page) {
-  if (!currentUser) {
-    showLogin();
-    return;
-  }
 
-  if (page === "users" && !isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return;
-  }
-
-  if (page === "auditlog" && !isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return;
-  }
-
-  currentModule = page;
-
-  document.querySelectorAll(".nav-item[data-page]").forEach(button => {
-    button.classList.toggle("active", button.dataset.page === page);
-  });
-
-  setText("pageTitle", PAGE_TITLES[page] || page);
-
-  closeMobileMenu();
-
-  if (page === "dashboard") {
-    await loadDashboard();
-  } else if (page === "capa") {
-    await loadCAPA();
-  } else if (page === "reports") {
-    await loadReportsPage();
-  } else if (page === "users") {
-    await loadUsers();
-  } else if (page === "auditlog") {
-    await loadAuditLog();
-  } else {
-    await loadModule(page);
-  }
-}
-
-/* =========================================================
+/* =====================================================
    DASHBOARD
-   ========================================================= */
+   ===================================================== */
 
 async function loadDashboard() {
-  const container = getPageContent();
 
-  if (!container) return;
+    DOM.pageContent.innerHTML = `
 
-  container.innerHTML = `
-    <div class="qms-loading">
-      <div class="loader"></div>
-      <p>Loading QMS dashboard...</p>
-    </div>
-  `;
+        <div class="empty-state">
 
-  const result = await apiRequest("DASHBOARD");
+            <div class="empty-state-title">
+                Loading dashboard...
+            </div>
 
-  console.log("DASHBOARD RESULT:", result);
+        </div>
 
-  if (!result || !result.success) {
-    container.innerHTML = `
-      <div class="qms-empty-state">
-        <h3>Dashboard unavailable</h3>
-        <p>${escapeHtml(getFriendlyError(result))}</p>
-        <button type="button" onclick="loadDashboard()">Retry</button>
-      </div>
     `;
-    return;
-  }
 
-  renderDashboard(result);
+    try {
+
+        const response =
+            await apiRequest({
+
+                action:
+                    "DASHBOARD",
+
+                token:
+                    App.token
+
+            });
+
+
+        if (
+            !response.success
+        ) {
+
+            handleApiError(
+                response
+            );
+
+            return;
+
+        }
+
+
+        renderDashboard(
+            response
+        );
+
+
+    } catch (error) {
+
+        console.error(error);
+
+        DOM.pageContent.innerHTML = `
+
+            <div class="empty-state">
+
+                <div class="empty-state-title">
+                    Dashboard unavailable
+                </div>
+
+                <div class="empty-state-text">
+                    Unable to retrieve QMS data.
+                </div>
+
+            </div>
+
+        `;
+
+    }
+
 }
+
+
+/* =====================================================
+   DASHBOARD RENDER
+   ===================================================== */
 
 function renderDashboard(data) {
-  const container = getPageContent();
-  if (!container) return;
 
-  const stats = data.stats || {};
+    const capaTotal =
+        data.capa?.total || 0;
 
-  container.innerHTML = `
-    <div class="qms-page-header">
-      <div>
-        <h1>QMS Control Center</h1>
-        <p>Quality management, CAPA, compliance, complaints and audit control.</p>
-      </div>
-      <div class="qms-status-badge">SYSTEM ONLINE</div>
-    </div>
+    const complaintTotal =
+        data.complaints?.total || 0;
 
-    <div class="qms-stat-grid">
-      ${statCard("CAPA", stats.capa, "capa")}
-      ${statCard("Complaints", stats.complaints, "complaints")}
-      ${statCard("Compliance", stats.compliance, "compliance")}
-      ${statCard("Audits", stats.audits, "audits")}
-      ${statCard("Actions", stats.actions, "actions")}
-      ${statCard("Documents", stats.documents, "documents")}
-      ${statCard("Evidence", stats.evidence, "evidence")}
-      ${statCard("Overdue", stats.overdue, "overdue")}
-    </div>
+    const complianceTotal =
+        data.compliance?.total || 0;
 
-    <div class="qms-dashboard-grid">
-      <div class="qms-panel">
-        <div class="qms-panel-header">
-          <div>
-            <h3>QMS Modules</h3>
-            <p>Open a module to view and manage records.</p>
-          </div>
+    const auditTotal =
+        data.audits?.total || 0;
+
+    const overdueCapa =
+        data.overdueCapa || 0;
+
+    const overdueActions =
+        data.overdueActions || 0;
+
+
+    DOM.pageContent.innerHTML = `
+
+        <div class="toolbar">
+
+            <div class="toolbar-left">
+
+                <div>
+
+                    <div class="panel-title">
+                        QMS Overview
+                    </div>
+
+                    <div class="panel-subtitle">
+                        Current quality and compliance position
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="toolbar-right">
+
+                <button
+                    class="btn btn-primary"
+                    onclick="navigate('capa')"
+                >
+                    + New CAPA
+                </button>
+
+            </div>
+
         </div>
 
-        <div class="qms-module-grid">
-          ${moduleCard("CAPA", "capa", "Corrective and preventive actions")}
-          ${moduleCard("Complaints", "complaints", "Customer complaints and investigations")}
-          ${moduleCard("Compliance", "compliance", "Requirements and compliance status")}
-          ${moduleCard("Audits", "audits", "Audit findings and closure")}
-          ${moduleCard("Actions", "actions", "Corrective and follow-up actions")}
-          ${moduleCard("Documents", "documents", "Controlled QMS documents")}
-          ${moduleCard("Evidence", "evidence", "Objective evidence and records")}
-          ${moduleCard("Reports", "reports", "Audit-ready management reports")}
-        </div>
-      </div>
 
-      <div class="qms-panel">
-        <div class="qms-panel-header">
-          <div>
-            <h3>System Information</h3>
-            <p>Current session and system state.</p>
-          </div>
-        </div>
+        <div class="kpi-grid">
 
-        <div class="qms-info-list">
-          <div><span>User</span><strong>${escapeHtml(currentUser?.name || currentUser?.username || "")}</strong></div>
-          <div><span>Role</span><strong>${escapeHtml(currentUser?.role || "")}</strong></div>
-          <div><span>Department</span><strong>${escapeHtml(currentUser?.department || "")}</strong></div>
-          <div><span>Status</span><strong>ACTIVE</strong></div>
-        </div>
-      </div>
-    </div>
-  `;
-}
+            ${kpiCard(
+                "CAPA",
+                capaTotal,
+                "Total CAPA records"
+            )}
 
-function statCard(label, value, page) {
-  return `
-    <button type="button" class="qms-stat-card" onclick="openModule('${page}')">
-      <span>${escapeHtml(label)}</span>
-      <strong>${escapeHtml(value ?? 0)}</strong>
-    </button>
-  `;
-}
+            ${kpiCard(
+                "COMPLAINTS",
+                complaintTotal,
+                "Total complaints"
+            )}
 
-function moduleCard(label, page, description) {
-  return `
-    <button type="button" class="qms-module-card" onclick="openModule('${page}')">
-      <strong>${escapeHtml(label)}</strong>
-      <span>${escapeHtml(description)}</span>
-    </button>
-  `;
-}
+            ${kpiCard(
+                "COMPLIANCE",
+                complianceTotal,
+                "Compliance requirements"
+            )}
 
-/* =========================================================
-   CAPA MODULE
-   Functional register + create + view + edit + delete
-   ========================================================= */
+            ${kpiCard(
+                "AUDITS",
+                auditTotal,
+                "Audit records"
+            )}
 
-const CAPA_FIELDS = [
-  "CAPA ID","Date Raised","Source","Department","Process",
-  "Issue / Nonconformity","Problem Statement","Immediate Correction",
-  "Root Cause","Root Cause Method","Corrective Action","Preventive Action",
-  "Action Owner","Target Date","Priority","Risk Level","Status",
-  "Effectiveness Check","Effectiveness Date","Effectiveness Result",
-  "Closure Date","Closed By","Evidence Link","Complaint ID","Audit ID",
-  "Compliance ID","Remarks"
-];
-
-let capaRecordsCache = [];
-
-async function loadCAPA() {
-  const container = getPageContent();
-  if (!container) return;
-
-  container.innerHTML = `<div class="qms-loading"><div class="loader"></div><p>Loading CAPA register...</p></div>`;
-
-  const result = await apiRequest("LIST", { module: "CAPA" });
-  console.log("CAPA LIST RESULT:", result);
-
-  if (!result || !result.success) {
-    container.innerHTML = `<div class="qms-empty-state"><h3>Unable to load CAPA</h3><p>${escapeHtml(getFriendlyError(result))}</p><button type="button" onclick="loadCAPA()">Retry</button></div>`;
-    return;
-  }
-
-  capaRecordsCache = Array.isArray(result.records) ? result.records :
-    Array.isArray(result.rows) ? result.rows :
-    Array.isArray(result.data) ? result.data : [];
-
-  renderCAPAPage();
-}
-
-function renderCAPAPage() {
-  const container = getPageContent();
-  if (!container) return;
-
-  const openCount = capaRecordsCache.filter(r =>
-    !["CLOSED","CLOSE"].includes(String(r["Status"] || "").trim().toUpperCase())
-  ).length;
-
-  const overdueCount = capaRecordsCache.filter(isCAPAOverdue).length;
-  const closedCount = capaRecordsCache.length - openCount;
-
-  container.innerHTML = `
-    <div class="qms-page-header">
-      <div>
-        <h1>CAPA Management</h1>
-        <p>Corrective and preventive action register.</p>
-      </div>
-      <button type="button" class="qms-primary-button" onclick="showCAPAForm()">+ New CAPA</button>
-    </div>
-
-    <div class="qms-stat-grid">
-      <div class="qms-stat-card"><span>Total CAPA</span><strong>${capaRecordsCache.length}</strong></div>
-      <div class="qms-stat-card"><span>Open CAPA</span><strong>${openCount}</strong></div>
-      <div class="qms-stat-card"><span>Overdue</span><strong>${overdueCount}</strong></div>
-      <div class="qms-stat-card"><span>Closed</span><strong>${Math.max(0, closedCount)}</strong></div>
-    </div>
-
-    <div id="capaFormContainer"></div>
-
-    <div class="qms-panel">
-      <div class="qms-panel-header">
-        <div>
-          <h3>CAPA Register</h3>
-          <p>All corrective and preventive actions.</p>
-        </div>
-      </div>
-      <div id="capaTableContainer">${buildCAPATable()}</div>
-    </div>
-  `;
-}
-
-function buildCAPATable() {
-  if (!capaRecordsCache.length) {
-    return `<div class="qms-empty-state"><h3>No CAPA records</h3><p>Create the first CAPA record using the button above.</p></div>`;
-  }
-
-  const columns = [
-    "CAPA ID","Date Raised","Source","Department",
-    "Issue / Nonconformity","Action Owner","Target Date",
-    "Priority","Risk Level","Status"
-  ];
-
-  let html = `<div class="qms-table-wrapper"><table class="qms-table"><thead><tr>`;
-  columns.forEach(c => html += `<th>${escapeHtml(c)}</th>`);
-  html += `<th>Actions</th></tr></thead><tbody>`;
-
-  capaRecordsCache.forEach(record => {
-    const id = record["CAPA ID"] || "";
-    html += `<tr>`;
-    columns.forEach(c => html += `<td>${formatCell(record[c])}</td>`);
-    html += `
-      <td>
-        <div style="display:flex;gap:6px;flex-wrap:wrap;">
-          <button type="button" onclick="viewCAPA('${escapeJs(id)}')">View</button>
-          <button type="button" onclick="editCAPA('${escapeJs(id)}')">Edit</button>
-          ${isAdmin() ? `<button type="button" onclick="deleteCAPA('${escapeJs(id)}')">Delete</button>` : ""}
-        </div>
-      </td>
-    </tr>`;
-  });
-
-  html += `</tbody></table></div>`;
-  return html;
-}
-
-function showCAPAForm(record = null) {
-  const container = document.getElementById("capaFormContainer");
-  if (!container) return;
-
-  const editing = !!record;
-  const today = new Date().toISOString().slice(0,10);
-  const value = key => escapeHtml(record?.[key] ?? "");
-
-  container.innerHTML = `
-    <div class="qms-panel" style="margin-bottom:20px;">
-      <div class="qms-panel-header">
-        <div>
-          <h3>${editing ? "Edit CAPA" : "New CAPA"}</h3>
-          <p>${editing ? escapeHtml(record["CAPA ID"] || "") : "Create a new corrective and preventive action."}</p>
-        </div>
-        <button type="button" onclick="cancelCAPAForm()">Close</button>
-      </div>
-
-      <form id="capaForm" onsubmit="submitCAPAForm(event)">
-        <input type="hidden" name="CAPA ID" value="${value("CAPA ID")}">
-
-        <div class="qms-form-grid">
-          ${capaInput("Date Raised","date",record?.["Date Raised"] || today,true)}
-          ${capaSelect("Source",record?.["Source"],["Complaint","Audit","Compliance","Internal","Customer","Management Review","Other"],true)}
-          ${capaInput("Department","text",value("Department"),true)}
-          ${capaInput("Process","text",value("Process"),true)}
-          ${capaTextarea("Issue / Nonconformity",value("Issue / Nonconformity"),true)}
-          ${capaTextarea("Problem Statement",value("Problem Statement"),true)}
-          ${capaTextarea("Immediate Correction",value("Immediate Correction"))}
-          ${capaTextarea("Root Cause",value("Root Cause"))}
-          ${capaSelect("Root Cause Method",record?.["Root Cause Method"],["5 Why","Fishbone / Ishikawa","Pareto","8D","Fault Tree","Other"])}
-          ${capaTextarea("Corrective Action",value("Corrective Action"),true)}
-          ${capaTextarea("Preventive Action",value("Preventive Action"))}
-          ${capaInput("Action Owner","text",value("Action Owner"),true)}
-          ${capaInput("Target Date","date",record?.["Target Date"] || "")}
-          ${capaSelect("Priority",record?.["Priority"],["LOW","MEDIUM","HIGH","CRITICAL"],true)}
-          ${capaSelect("Risk Level",record?.["Risk Level"],["LOW","MEDIUM","HIGH","CRITICAL"],true)}
-          ${capaSelect("Status",record?.["Status"],["OPEN","IN PROGRESS","PENDING EFFECTIVENESS","CLOSED"],true)}
-          ${capaTextarea("Effectiveness Check",value("Effectiveness Check"))}
-          ${capaInput("Effectiveness Date","date",record?.["Effectiveness Date"] || "")}
-          ${capaTextarea("Effectiveness Result",value("Effectiveness Result"))}
-          ${capaInput("Closure Date","date",record?.["Closure Date"] || "")}
-          ${capaInput("Closed By","text",value("Closed By"))}
-          ${capaInput("Evidence Link","url",value("Evidence Link"))}
-          ${capaInput("Complaint ID","text",value("Complaint ID"))}
-          ${capaInput("Audit ID","text",value("Audit ID"))}
-          ${capaInput("Compliance ID","text",value("Compliance ID"))}
-          ${capaTextarea("Remarks",value("Remarks"))}
         </div>
 
-        <div style="display:flex;justify-content:flex-end;gap:10px;margin-top:20px;">
-          <button type="button" onclick="cancelCAPAForm()">Cancel</button>
-          <button type="submit" class="qms-primary-button">${editing ? "Update CAPA" : "Create CAPA"}</button>
+
+        <div class="content-grid">
+
+            <div class="panel">
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <div class="panel-title">
+                            Attention Required
+                        </div>
+
+                        <div class="panel-subtitle">
+                            Items requiring follow-up
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="panel-body">
+
+                    <div class="kpi-grid">
+
+                        ${smallKpi(
+                            "Overdue CAPA",
+                            overdueCapa
+                        )}
+
+                        ${smallKpi(
+                            "Overdue Actions",
+                            overdueActions
+                        )}
+
+                    </div>
+
+                </div>
+
+            </div>
+
+
+            <div class="panel">
+
+                <div class="panel-header">
+
+                    <div>
+
+                        <div class="panel-title">
+                            System Status
+                        </div>
+
+                        <div class="panel-subtitle">
+                            GGL QMS Control Center
+                        </div>
+
+                    </div>
+
+                </div>
+
+
+                <div class="panel-body">
+
+                    <div class="system-status">
+
+                        <div>
+                            <strong>API</strong>
+                            <span class="status status-closed">
+                                ONLINE
+                            </span>
+                        </div>
+
+                        <div>
+                            <strong>Session</strong>
+                            <span class="status status-closed">
+                                ACTIVE
+                            </span>
+                        </div>
+
+                        <div>
+                            <strong>User</strong>
+                            <span>
+                                ${escapeHtml(
+                                    App.user.name
+                                )}
+                            </span>
+                        </div>
+
+                    </div>
+
+                </div>
+
+            </div>
+
         </div>
-      </form>
-    </div>`;
-}
 
-function capaInput(label,type,value="",required=false) {
-  return `<div class="form-group"><label>${escapeHtml(label)}${required ? " *" : ""}</label><input name="${escapeHtml(label)}" type="${type}" value="${value}" ${required ? "required" : ""}></div>`;
-}
 
-function capaTextarea(label,value="",required=false) {
-  return `<div class="form-group" style="grid-column:1/-1;"><label>${escapeHtml(label)}${required ? " *" : ""}</label><textarea name="${escapeHtml(label)}" rows="3" ${required ? "required" : ""}>${value}</textarea></div>`;
-}
+        <div class="panel">
 
-function capaSelect(label,selected,options,required=false) {
-  const current = String(selected || "");
-  return `<div class="form-group"><label>${escapeHtml(label)}${required ? " *" : ""}</label><select name="${escapeHtml(label)}" ${required ? "required" : ""}><option value="">Select...</option>${options.map(o => `<option value="${escapeHtml(o)}" ${current === o ? "selected" : ""}>${escapeHtml(o)}</option>`).join("")}</select></div>`;
-}
+            <div class="panel-header">
 
-async function submitCAPAForm(event) {
-  event.preventDefault();
+                <div>
 
-  const form = event.target;
-  const fd = new FormData(form);
-  const record = {};
+                    <div class="panel-title">
+                        Quick Access
+                    </div>
 
-  fd.forEach((value,key) => {
-    if (key !== "CAPA ID") record[key] = value;
-  });
+                    <div class="panel-subtitle">
+                        QMS modules
+                    </div>
 
-  const capaId = String(fd.get("CAPA ID") || "");
+                </div>
 
-  if (String(record["Status"] || "").toUpperCase() === "CLOSED" && !record["Closure Date"]) {
-    record["Closure Date"] = new Date().toISOString().slice(0,10);
-  }
+            </div>
 
-  const result = capaId
-    ? await apiRequest("UPDATE", { module:"CAPA", recordId:capaId, record })
-    : await apiRequest("CREATE", { module:"CAPA", record });
 
-  console.log("CAPA SAVE RESULT:", result);
+            <div class="panel-body">
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result),"error");
-    return;
-  }
+                <div class="quick-grid">
 
-  showMessage(
-    capaId ? `CAPA ${capaId} updated successfully.` :
-      `CAPA ${result.recordId || "record"} created successfully.`,
-    "success"
-  );
+                    ${quickButton(
+                        "CAPA",
+                        "capa"
+                    )}
 
-  await loadCAPA();
-}
+                    ${quickButton(
+                        "Complaints",
+                        "complaints"
+                    )}
 
-function cancelCAPAForm() {
-  const container = document.getElementById("capaFormContainer");
-  if (container) container.innerHTML = "";
-}
+                    ${quickButton(
+                        "Compliance",
+                        "compliance"
+                    )}
 
-async function viewCAPA(capaId) {
-  const result = await apiRequest("GET", {
-    module:"CAPA",
-    recordId:capaId
-  });
+                    ${quickButton(
+                        "Audits",
+                        "audits"
+                    )}
 
-  if (!result || !result.success || !result.record) {
-    showMessage(getFriendlyError(result),"error");
-    return;
-  }
+                    ${quickButton(
+                        "Documents",
+                        "documents"
+                    )}
 
-  renderCAPADetail(result.record);
-}
+                    ${quickButton(
+                        "Reports",
+                        "reports"
+                    )}
 
-function renderCAPADetail(record) {
-  const container = document.getElementById("capaFormContainer");
-  if (!container) return;
+                </div>
 
-  const rows = CAPA_FIELDS.map(field => `
-    <div class="qms-info-list">
-      <div>
-        <span>${escapeHtml(field)}</span>
-        <strong>${formatCell(record[field]) || "—"}</strong>
-      </div>
-    </div>
-  `).join("");
+            </div>
 
-  container.innerHTML = `
-    <div class="qms-panel" style="margin-bottom:20px;">
-      <div class="qms-panel-header">
-        <div>
-          <h3>${escapeHtml(record["CAPA ID"] || "CAPA")}</h3>
-          <p>CAPA record detail</p>
         </div>
-        <div style="display:flex;gap:8px;">
-          <button type="button" onclick="editCAPA('${escapeJs(record["CAPA ID"] || "")}')">Edit</button>
-          <button type="button" onclick="cancelCAPAForm()">Close</button>
-        </div>
-      </div>
-      ${rows}
-    </div>`;
-}
 
-async function editCAPA(capaId) {
-  const result = await apiRequest("GET", {
-    module:"CAPA",
-    recordId:capaId
-  });
-
-  if (!result || !result.success || !result.record) {
-    showMessage(getFriendlyError(result),"error");
-    return;
-  }
-
-  showCAPAForm(result.record);
-  window.scrollTo({top:0,behavior:"smooth"});
-}
-
-async function deleteCAPA(capaId) {
-  if (!isAdmin()) {
-    showMessage("Administrator access required.","error");
-    return;
-  }
-
-  if (!capaId || !confirm(`Delete ${capaId}? This action cannot be undone.`)) return;
-
-  const result = await apiRequest("DELETE", {
-    module:"CAPA",
-    recordId:capaId
-  });
-
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result),"error");
-    return;
-  }
-
-  showMessage(`${capaId} deleted successfully.`,"success");
-  await loadCAPA();
-}
-
-function isCAPAOverdue(record) {
-  const status = String(record["Status"] || "").trim().toUpperCase();
-  if (status === "CLOSED") return false;
-
-  const raw = record["Target Date"];
-  if (!raw) return false;
-
-  const date = new Date(raw);
-  if (Number.isNaN(date.getTime())) return false;
-
-  const today = new Date();
-  today.setHours(0,0,0,0);
-  date.setHours(0,0,0,0);
-
-  return date < today;
-}
-
-/* =========================================================
-   MODULES
-   ========================================================= */
-
-async function loadModule(page) {
-  const container = getPageContent();
-  if (!container) return;
-
-  const backendModule = MODULE_MAP[page] || String(page).toUpperCase();
-
-  container.innerHTML = `
-    <div class="qms-loading">
-      <div class="loader"></div>
-      <p>Loading ${escapeHtml(PAGE_TITLES[page] || page)}...</p>
-    </div>
-  `;
-
-  const result = await apiRequest("LIST", {
-    module: backendModule
-  });
-
-  console.log("MODULE RESULT:", backendModule, result);
-
-  if (!result || !result.success) {
-    container.innerHTML = `
-      <div class="qms-empty-state">
-        <h3>Unable to load module</h3>
-        <p>${escapeHtml(getFriendlyError(result))}</p>
-        <button type="button" onclick="openModule('${escapeJs(page)}')">Retry</button>
-      </div>
     `;
-    return;
-  }
 
-  renderModuleList(backendModule, result);
 }
 
-function renderModuleList(module, result) {
-  const container = getPageContent();
-  if (!container) return;
 
-  const rows =
-    result.rows ||
-    result.data ||
-    result.records ||
-    [];
+/* =====================================================
+   KPI HELPERS
+   ===================================================== */
 
-  const normalizedRows = Array.isArray(rows)
-    ? rows
-    : [];
+function kpiCard(
+    label,
+    value,
+    description
+) {
 
-  container.innerHTML = `
-    <div class="qms-page-header">
-      <div>
-        <h1>${escapeHtml(PAGE_TITLES[currentModule] || module)}</h1>
-        <p>${normalizedRows.length} record(s) available.</p>
-      </div>
-      <div>
-        <button type="button" class="qms-primary-button"
-          onclick="showMessage('Record creation form can be connected here.', 'info')">
-          + New Record
+    return `
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                ${label}
+            </div>
+
+            <div class="kpi-value">
+                ${value}
+            </div>
+
+            <div class="kpi-description">
+                ${description}
+            </div>
+
+        </div>
+
+    `;
+
+}
+
+
+function smallKpi(
+    label,
+    value
+) {
+
+    return `
+
+        <div class="kpi-card">
+
+            <div class="kpi-label">
+                ${label}
+            </div>
+
+            <div class="kpi-value">
+                ${value}
+            </div>
+
+        </div>
+
+    `;
+
+}
+
+
+function quickButton(
+    label,
+    page
+) {
+
+    return `
+
+        <button
+            class="btn btn-secondary"
+            onclick="navigate('${page}')"
+        >
+
+            ${escapeHtml(label)}
+
         </button>
-      </div>
-    </div>
 
-    ${
-      normalizedRows.length
-        ? buildTable(normalizedRows)
-        : `
-          <div class="qms-empty-state">
-            <h3>No records found</h3>
-            <p>This module currently contains no records.</p>
-          </div>
-        `
-    }
-  `;
+    `;
+
 }
 
-/* =========================================================
+
+
+/* =====================================================
+   REPORTS
+   ===================================================== */
+
+async function loadReports() {
+
+    DOM.pageContent.innerHTML = `
+
+        <div class="toolbar">
+
+            <div>
+                <div class="panel-title">
+                    QMS Reports
+                </div>
+
+                <div class="panel-subtitle">
+                    Generate and download audit-ready QMS reports.
+                </div>
+            </div>
+
+        </div>
+
+        <div class="panel">
+
+            <div class="panel-header">
+
+                <div>
+                    <div class="panel-title">
+                        CAPA Management Report
+                    </div>
+
+                    <div class="panel-subtitle">
+                        Current CAPA register, status summary, risk and overdue position.
+                    </div>
+                </div>
+
+                <button
+                    id="generateCapaReportButton"
+                    class="btn btn-primary"
+                    type="button"
+                    onclick="generateCapaReport()"
+                >
+                    Generate CAPA Report
+                </button>
+
+            </div>
+
+            <div class="panel-body">
+
+                <div id="reportStatus">
+                    No report generated in this session.
+                </div>
+
+                <div id="reportDownloads"
+                     style="margin-top:16px;">
+                </div>
+
+                <div id="reportPreview"
+                     style="margin-top:20px;">
+                </div>
+
+            </div>
+
+        </div>
+
+    `;
+
+}
+
+
+async function generateCapaReport() {
+
+    const button =
+        document.getElementById(
+            "generateCapaReportButton"
+        );
+
+    const status =
+        document.getElementById(
+            "reportStatus"
+        );
+
+    const downloads =
+        document.getElementById(
+            "reportDownloads"
+        );
+
+    const preview =
+        document.getElementById(
+            "reportPreview"
+        );
+
+    if (button) {
+        button.disabled = true;
+        button.textContent = "Generating...";
+    }
+
+    if (status) {
+        status.innerHTML =
+            '<span class="status status-open">Generating CAPA report...</span>';
+    }
+
+    if (downloads) {
+        downloads.innerHTML = "";
+    }
+
+    if (preview) {
+        preview.innerHTML = "";
+    }
+
+    try {
+
+        const response =
+            await apiRequest({
+
+                action: "REPORT",
+
+                reportId: "RPT-001",
+
+                module: "CAPA",
+
+                token: App.token
+
+            });
+
+        if (!response || !response.success) {
+
+            handleApiError(response || {
+                error: "REPORT_GENERATION_FAILED"
+            });
+
+            if (status) {
+                status.textContent =
+                    "Report generation failed.";
+            }
+
+            return;
+        }
+
+        renderGeneratedReport(response);
+
+        /*
+         * The browser is allowed to start one download
+         * from the original Generate click more reliably
+         * than attempting three simultaneous downloads.
+         *
+         * PDF is therefore started automatically.
+         * XLSX and CSV remain available as explicit buttons.
+         */
+        if (
+            response.files &&
+            response.files.pdf &&
+            response.files.pdf.downloadUrl
+        ) {
+
+            downloadReportFile(
+                response.files.pdf.downloadUrl,
+                response.files.pdf.fileName
+            );
+
+        }
+
+    } catch (error) {
+
+        console.error(
+            "CAPA REPORT ERROR:",
+            error
+        );
+
+        if (status) {
+            status.textContent =
+                "Unable to generate the CAPA report.";
+        }
+
+        showToast(
+            "Unable to generate CAPA report.",
+            "error"
+        );
+
+    } finally {
+
+        if (button) {
+            button.disabled = false;
+            button.textContent = "Generate CAPA Report";
+        }
+
+    }
+
+}
+
+
+function renderGeneratedReport(result) {
+
+    const status =
+        document.getElementById(
+            "reportStatus"
+        );
+
+    const downloads =
+        document.getElementById(
+            "reportDownloads"
+        );
+
+    const preview =
+        document.getElementById(
+            "reportPreview"
+        );
+
+    const reportId =
+        result.reportId ||
+        "RPT-001";
+
+    const reportName =
+        result.reportName ||
+        "CAPA Management Report";
+
+    if (status) {
+
+        status.innerHTML = `
+
+            <div>
+                <strong>${escapeHtml(reportId)}</strong>
+                generated successfully.
+            </div>
+
+            <div class="panel-subtitle"
+                 style="margin-top:4px;">
+                ${escapeHtml(reportName)}
+                &nbsp;•&nbsp;
+                ${escapeHtml(
+                    result.generatedAt || ""
+                )}
+            </div>
+
+        `;
+
+    }
+
+    const files =
+        result.files || {};
+
+    if (downloads) {
+
+        downloads.innerHTML = `
+
+            <div style="
+                display:flex;
+                gap:10px;
+                flex-wrap:wrap;
+                align-items:center;
+            ">
+
+                ${
+                    files.pdf
+                        ? reportDownloadButton(
+                            "PDF",
+                            files.pdf,
+                            "btn btn-primary"
+                        )
+                        : ""
+                }
+
+                ${
+                    files.xlsx
+                        ? reportDownloadButton(
+                            "Excel",
+                            files.xlsx,
+                            "btn btn-secondary"
+                        )
+                        : ""
+                }
+
+                ${
+                    files.csv
+                        ? reportDownloadButton(
+                            "CSV",
+                            files.csv,
+                            "btn btn-secondary"
+                        )
+                        : ""
+                }
+
+            </div>
+
+            <div class="panel-subtitle"
+                 style="margin-top:10px;">
+                PDF download is started automatically after generation.
+                Excel and CSV remain available above.
+            </div>
+
+        `;
+
+    }
+
+    if (preview) {
+
+        const summary =
+            result.summary || {};
+
+        const rows =
+            Array.isArray(result.rows)
+                ? result.rows
+                : [];
+
+        preview.innerHTML = buildCapaReportPreview(
+            summary,
+            rows
+        );
+
+    }
+
+}
+
+
+function reportDownloadButton(
+    label,
+    file,
+    className
+) {
+
+    return `
+
+        <button
+            type="button"
+            class="${className}"
+            onclick="downloadReportFile(
+                '${escapeJs(file.downloadUrl || file.url || "")}',
+                '${escapeJs(file.fileName || label)}'
+            )"
+        >
+            Download ${escapeHtml(label)}
+        </button>
+
+    `;
+
+}
+
+
+function downloadReportFile(
+    url,
+    fileName
+) {
+
+    if (!url) {
+
+        showToast(
+            "Download link is not available.",
+            "error"
+        );
+
+        return;
+
+    }
+
+    const anchor =
+        document.createElement("a");
+
+    anchor.href = url;
+    anchor.download = fileName || "";
+    anchor.target = "_blank";
+    anchor.rel = "noopener";
+
+    document.body.appendChild(anchor);
+
+    anchor.click();
+
+    anchor.remove();
+
+}
+
+
+function buildCapaReportPreview(
+    summary,
+    rows
+) {
+
+    const tableRows =
+        rows
+            .slice(0, 25)
+            .map(row => `
+
+                <tr>
+
+                    <td>${escapeHtml(
+                        row["CAPA ID"] || ""
+                    )}</td>
+
+                    <td>${escapeHtml(
+                        row["Date Raised"] || ""
+                    )}</td>
+
+                    <td>${escapeHtml(
+                        row["Source"] || ""
+                    )}</td>
+
+                    <td>${escapeHtml(
+                        row["Issue / Nonconformity"] || ""
+                    )}</td>
+
+                    <td>${escapeHtml(
+                        row["Action Owner"] || ""
+                    )}</td>
+
+                    <td>${escapeHtml(
+                        row["Target Date"] || ""
+                    )}</td>
+
+                    <td>${escapeHtml(
+                        row["Status"] || ""
+                    )}</td>
+
+                </tr>
+
+            `)
+            .join("");
+
+    return `
+
+        <div class="panel"
+             style="margin-top:0;">
+
+            <div class="panel-header">
+
+                <div>
+                    <div class="panel-title">
+                        Report Preview
+                    </div>
+
+                    <div class="panel-subtitle">
+                        First 25 CAPA records are shown here.
+                        The downloaded files contain the complete register.
+                    </div>
+                </div>
+
+            </div>
+
+            <div class="panel-body">
+
+                <div class="kpi-grid">
+
+                    ${smallKpi(
+                        "Total CAPA",
+                        summary.total || 0
+                    )}
+
+                    ${smallKpi(
+                        "Open",
+                        summary.open || 0
+                    )}
+
+                    ${smallKpi(
+                        "Closed",
+                        summary.closed || 0
+                    )}
+
+                    ${smallKpi(
+                        "Overdue",
+                        summary.overdue || 0
+                    )}
+
+                    ${smallKpi(
+                        "High Risk",
+                        summary.highRisk || 0
+                    )}
+
+                    ${smallKpi(
+                        "Pending Effectiveness",
+                        summary.pendingEffectiveness || 0
+                    )}
+
+                </div>
+
+                <div class="table-container"
+                     style="margin-top:20px;">
+
+                    <table class="data-table">
+
+                        <thead>
+
+                            <tr>
+                                <th>CAPA ID</th>
+                                <th>Date</th>
+                                <th>Source</th>
+                                <th>Issue / Nonconformity</th>
+                                <th>Owner</th>
+                                <th>Target Date</th>
+                                <th>Status</th>
+                            </tr>
+
+                        </thead>
+
+                        <tbody>
+
+                            ${
+                                tableRows ||
+                                `
+                                    <tr>
+                                        <td colspan="7">
+                                            No CAPA records found.
+                                        </td>
+                                    </tr>
+                                `
+                            }
+
+                        </tbody>
+
+                    </table>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    `;
+
+}
+
+
+/* =====================================================
    USERS
-   ========================================================= */
+   ===================================================== */
 
 async function loadUsers() {
-  if (!isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return;
-  }
 
-  const container = getPageContent();
-  if (!container) return;
+    DOM.pageContent.innerHTML = `
 
-  container.innerHTML = `
-    <div class="qms-loading">
-      <div class="loader"></div>
-      <p>Loading users...</p>
-    </div>
-  `;
+        <div class="empty-state">
 
-  const result = await apiRequest("ADMIN_USERS");
+            <div class="empty-state-title">
+                Loading users...
+            </div>
 
-  if (!result || !result.success) {
-    container.innerHTML = `
-      <div class="qms-empty-state">
-        <h3>Unable to load users</h3>
-        <p>${escapeHtml(getFriendlyError(result))}</p>
-      </div>
+        </div>
+
     `;
-    return;
-  }
 
-  renderUsers(result);
-}
 
-function renderUsers(result) {
-  const container = getPageContent();
-  if (!container) return;
+    try {
 
-  const users =
-    result.users ||
-    result.data ||
-    result.rows ||
-    [];
+        const response =
+            await apiRequest({
 
-  const safeUsers = Array.isArray(users) ? users : [];
+                action:
+                    "LIST",
 
-  container.innerHTML = `
-    <div class="qms-page-header">
-      <div>
-        <h1>User Administration</h1>
-        <p>Manage QMS users, roles and access status.</p>
-      </div>
-      <button type="button" class="qms-primary-button"
-        onclick="showMessage('Use createUser(data) to create a user through the API.', 'info')">
-        + Add User
-      </button>
-    </div>
+                module:
+                    "USERS",
 
-    ${
-      safeUsers.length
-        ? buildTable(safeUsers, true)
-        : `<div class="qms-empty-state"><h3>No users found</h3></div>`
+                token:
+                    App.token
+
+            });
+
+
+        /*
+         * USERS isn't a normal module in the current
+         * module map, so load directly through the
+         * dedicated function below.
+         */
+
+        await loadUsersDirect();
+
+    } catch (error) {
+
+        console.error(error);
+
+        showAccessDenied();
+
     }
-  `;
-}
 
-/* =========================================================
-   AUDIT LOG
-   ========================================================= */
-
-async function loadAuditLog() {
-  if (!isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return;
-  }
-
-  const container = getPageContent();
-  if (!container) return;
-
-  container.innerHTML = `
-    <div class="qms-loading">
-      <div class="loader"></div>
-      <p>Loading audit log...</p>
-    </div>
-  `;
-
-  const result = await apiRequest("LIST", {
-    module: "AUDIT_LOG"
-  });
-
-  if (!result || !result.success) {
-    container.innerHTML = `
-      <div class="qms-empty-state">
-        <h3>Unable to load audit log</h3>
-        <p>${escapeHtml(getFriendlyError(result))}</p>
-      </div>
-    `;
-    return;
-  }
-
-  renderModuleList("AUDIT_LOG", result);
-}
-
-/* =========================================================
-   REPORTS
-   ========================================================= */
-
-async function loadReportsPage() {
-  const container = getPageContent();
-  if (!container) return;
-
-  container.innerHTML = `
-    <div class="qms-page-header">
-      <div>
-        <h1>Report Center</h1>
-        <p>Generate controlled QMS reports from live records.</p>
-      </div>
-    </div>
-
-    <div class="qms-panel" style="margin-bottom:20px;">
-      <div class="qms-panel-header">
-        <div>
-          <h3>Report Controls</h3>
-          <p>Optional reporting period. Leave blank to include all available records.</p>
-        </div>
-      </div>
-
-      <div class="qms-form-grid">
-        <div class="form-group">
-          <label for="reportFromDate">From Date</label>
-          <input id="reportFromDate" type="date">
-        </div>
-
-        <div class="form-group">
-          <label for="reportToDate">To Date</label>
-          <input id="reportToDate" type="date">
-        </div>
-      </div>
-    </div>
-
-    <div class="qms-report-grid">
-      ${reportCard("CAPA Management Report", "RPT-001", "Complete CAPA status, aging and linkage report")}
-      ${reportCard("Complaint Report", "RPT-002", "Complaint register, severity and closure report")}
-      ${reportCard("Compliance Status Report", "RPT-003", "Requirement status, risk and review report")}
-      ${reportCard("Audit Findings Report", "RPT-004", "Audit findings, risk and CAPA linkage report")}
-      ${reportCard("Overdue Actions Report", "RPT-005", "Open actions past target date")}
-      ${reportCard("Evidence Index", "RPT-006", "Evidence register with Drive references")}
-    </div>
-
-    <div id="reportContent" class="qms-report-content"></div>
-  `;
-}
-
-function reportCard(label, reportId, description) {
-  return `
-    <div class="qms-module-card" style="cursor:default;">
-      <strong>${escapeHtml(label)}</strong>
-      <span>${escapeHtml(reportId)} · ${escapeHtml(description)}</span>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;">
-        <button type="button"
-          class="qms-primary-button"
-          onclick="generateReport('${escapeJs(reportId)}')">
-          Generate
-        </button>
-      </div>
-    </div>
-  `;
 }
 
 
-function qmsDownloadGeneratedFile(file, fallbackName) {
-  if (!file) return;
+async function loadUsersDirect() {
 
-  const url = file.downloadUrl || file.directDownloadUrl || file.url;
-  if (!url) return;
+    const response =
+        await apiRequest({
 
-  const name = file.fileName || file.name || fallbackName || "QMS_Report";
+            action:
+                "ADMIN_USERS",
 
-  // Google Drive's uc endpoint is preferable when the backend supplies a fileId.
-  const downloadUrl = file.fileId
-    ? `https://drive.google.com/uc?export=download&id=${encodeURIComponent(file.fileId)}`
-    : url;
+            token:
+                App.token
 
-  const a = document.createElement("a");
-  a.href = downloadUrl;
-  a.download = name;
-  a.target = "_blank";
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-}
+        });
 
-function qmsDownloadGeneratedReports(report) {
-  if (!report) return;
 
-  qmsDownloadGeneratedFile(
-    report.pdf,
-    "QMS_Report.pdf"
-  );
+    if (
+        !response.success
+    ) {
 
-  setTimeout(() => {
-    qmsDownloadGeneratedFile(
-      report.xlsx,
-      "QMS_Report.xlsx"
-    );
-  }, 500);
+        /*
+         * This endpoint will be added to the backend
+         * during the Admin module stage.
+         */
 
-  setTimeout(() => {
-    qmsDownloadGeneratedFile(
-      report.csv,
-      "QMS_Report.csv"
-    );
-  }, 1000);
-}
+        DOM.pageContent.innerHTML = `
 
-async function generateReport(reportId, options = {}) {
-  const fromDate =
-    options.fromDate ||
-    document.getElementById("reportFromDate")?.value ||
-    "";
+            <div class="panel">
 
-  const toDate =
-    options.toDate ||
-    document.getElementById("reportToDate")?.value ||
-    "";
+                <div class="panel-header">
 
-  const content = document.getElementById("reportContent");
+                    <div>
 
-  if (content) {
-    content.innerHTML = `
-      <div class="qms-loading">
-        <div class="loader"></div>
-        <p>Generating ${escapeHtml(reportId)}...</p>
-      </div>
-    `;
-  }
+                        <div class="panel-title">
+                            User Administration
+                        </div>
 
-  const result = await apiRequest("REPORT", {
-    reportId,
-    options: {
-      fromDate,
-      toDate
-    }
-  });
+                        <div class="panel-subtitle">
+                            Backend user management endpoint pending
+                        </div>
 
-  console.log("REPORT RESULT:", result);
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    if (content) {
-      content.innerHTML = `
-        <div class="qms-empty-state">
-          <h3>Report generation failed</h3>
-          <p>${escapeHtml(getFriendlyError(result))}</p>
-        </div>
-      `;
-    }
-    return null;
-  }
+                    </div>
 
-  renderReport(result);
-  qmsDownloadGeneratedReports(result);
-  showMessage(`${result.title || reportId} generated successfully. Downloads started.`, "success");
-  return result;
-}
-
-function renderReport(result) {
-  const container = document.getElementById("reportContent");
-  if (!container) return;
-
-  const rows =
-    result.rows ||
-    result.data ||
-    result.records ||
-    [];
-
-  const summary = result.summary || {};
-
-  const downloadButton = (key, label) => {
-    const target = result[key];
-    if (!target || !target.url) return "";
-    return `
-      <a class="qms-primary-button"
-         href="${escapeHtml(target.url)}"
-         target="_blank"
-         rel="noopener noreferrer">
-        ${escapeHtml(label)}
-      </a>
-    `;
-  };
-
-  container.innerHTML = `
-    <div class="qms-panel" style="margin-top:20px;">
-      <div class="qms-panel-header">
-        <div>
-          <h3>${escapeHtml(result.title || result.reportId || "Report")}</h3>
-          <p>
-            ${escapeHtml(result.reportId || "")}
-            · ${escapeHtml(String(result.recordCount ?? rows.length))} records
-          </p>
-        </div>
-
-        <div style="display:flex;gap:8px;flex-wrap:wrap;">
-          ${downloadButton("pdf", "Download PDF")}
-          ${downloadButton("xlsx", "Download XLSX")}
-          ${downloadButton("csv", "Download CSV")}
-        </div>
-      </div>
-
-      ${
-        Object.keys(summary).length
-          ? `
-            <div class="qms-stat-grid">
-              ${Object.entries(summary).map(([key,value]) => `
-                <div class="qms-stat-card">
-                  <span>${escapeHtml(key)}</span>
-                  <strong>${escapeHtml(value)}</strong>
                 </div>
-              `).join("")}
+
+                <div class="panel-body">
+
+                    User administration will be activated
+                    in the next backend update.
+
+                </div>
+
             </div>
-          `
-          : ""
-      }
 
-      ${
-        Array.isArray(rows) && rows.length
-          ? buildTable(rows)
-          : `
-            <div class="qms-empty-state">
-              <h3>No records in this report</h3>
+        `;
+
+        return;
+
+    }
+
+    renderUsers(
+        response.users || []
+    );
+
+}
+
+
+function renderUsers(users) {
+
+    let rows = "";
+
+    users.forEach(
+        user => {
+
+            rows += `
+
+                <tr>
+
+                    <td>
+                        ${escapeHtml(
+                            user["User ID"] ||
+                            user.userId ||
+                            ""
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            user.Username ||
+                            user.username ||
+                            ""
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            user.Name ||
+                            user.name ||
+                            ""
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            user.Role ||
+                            user.role ||
+                            ""
+                        )}
+                    </td>
+
+                    <td>
+                        ${escapeHtml(
+                            user.Status ||
+                            user.status ||
+                            ""
+                        )}
+                    </td>
+
+                    <td>
+
+                        <button
+                            class="btn btn-secondary"
+                            onclick="editUser('${escapeJs(
+                                user["User ID"] ||
+                                user.userId ||
+                                ""
+                            )}')"
+                        >
+                            Edit
+                        </button>
+
+                    </td>
+
+                </tr>
+
+            `;
+
+        }
+    );
+
+
+    DOM.pageContent.innerHTML = `
+
+        <div class="toolbar">
+
+            <div>
+
+                <div class="panel-title">
+                    User Administration
+                </div>
+
+                <div class="panel-subtitle">
+                    Manage authorized QMS users
+                </div>
+
             </div>
-          `
-      }
-    </div>
-  `;
+
+
+            <button
+                class="btn btn-primary"
+                onclick="openAddUser()"
+            >
+                + Add User
+            </button>
+
+        </div>
+
+
+        <div class="panel">
+
+            <div class="table-container">
+
+                <table class="data-table">
+
+                    <thead>
+
+                        <tr>
+
+                            <th>User ID</th>
+                            <th>Username</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Status</th>
+                            <th>Action</th>
+
+                        </tr>
+
+                    </thead>
+
+                    <tbody>
+
+                        ${
+                            rows ||
+                            `
+                                <tr>
+                                    <td colspan="6">
+                                        No users found.
+                                    </td>
+                                </tr>
+                            `
+                        }
+
+                    </tbody>
+
+                </table>
+
+            </div>
+
+        </div>
+
+    `;
+
 }
 
-/* =========================================================
-   CRUD
-   ========================================================= */
 
-async function getRecord(module, recordId) {
-  const result = await apiRequest("GET", {
-    module: MODULE_MAP[module] || String(module).toUpperCase(),
-    recordId: recordId
-  });
+/* =====================================================
+   AUDIT LOG PLACEHOLDER
+   ===================================================== */
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
+function loadAuditLog() {
 
-  currentModule = module;
-  currentRecordId = recordId;
-  return result;
+    DOM.pageContent.innerHTML = `
+
+        <div class="panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <div class="panel-title">
+                        Audit Log
+                    </div>
+
+                    <div class="panel-subtitle">
+                        System activity history
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="panel-body">
+
+                Audit log interface will be connected
+                after the core modules.
+
+            </div>
+
+        </div>
+
+    `;
+
 }
 
-async function createRecord(module, data) {
-  const result = await apiRequest("CREATE", {
-    module: MODULE_MAP[module] || String(module).toUpperCase(),
-    record: data
-  });
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
+/* =====================================================
+   PLACEHOLDER
+   ===================================================== */
 
-  showMessage("Record created successfully.", "success");
-  return result;
+function renderModulePlaceholder(
+    title,
+    message
+) {
+
+    DOM.pageContent.innerHTML = `
+
+        <div class="panel">
+
+            <div class="panel-header">
+
+                <div>
+
+                    <div class="panel-title">
+                        ${escapeHtml(title)}
+                    </div>
+
+                    <div class="panel-subtitle">
+                        QMS Control Center
+                    </div>
+
+                </div>
+
+            </div>
+
+            <div class="panel-body">
+
+                <div class="empty-state">
+
+                    <div class="empty-state-title">
+                        ${escapeHtml(title)}
+                    </div>
+
+                    <div class="empty-state-text">
+                        ${escapeHtml(message)}
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    `;
+
 }
 
-async function updateRecord(module, recordId, data) {
-  const result = await apiRequest("UPDATE", {
-    module: MODULE_MAP[module] || String(module).toUpperCase(),
-    recordId: recordId,
-    record: data
-  });
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
+/* =====================================================
+   ACCESS CONTROL
+   ===================================================== */
 
-  showMessage("Record updated successfully.", "success");
-  return result;
+function hasRole(
+    roles
+) {
+
+    if (!App.user)
+        return false;
+
+    const role =
+        String(
+            App.user.role || ""
+        ).toUpperCase();
+
+    return roles.includes(
+        role
+    );
+
 }
 
-async function deleteRecord(module, recordId) {
-  if (!isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return null;
-  }
 
-  if (!confirm("Delete this record? This action cannot be undone.")) {
-    return null;
-  }
+function showAccessDenied() {
 
-  const result = await apiRequest("DELETE", {
-    module: MODULE_MAP[module] || String(module).toUpperCase(),
-    recordId: recordId
-  });
+    DOM.pageContent.innerHTML = `
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
+        <div class="panel">
 
-  showMessage("Record deleted successfully.", "success");
-  return result;
+            <div class="panel-body">
+
+                <div class="empty-state">
+
+                    <div class="empty-state-title">
+                        Access Denied
+                    </div>
+
+                    <div class="empty-state-text">
+                        Your account does not have permission
+                        to access this section.
+                    </div>
+
+                </div>
+
+            </div>
+
+        </div>
+
+    `;
+
 }
 
-/* =========================================================
-   USER CRUD
-   ========================================================= */
 
-async function createUser(data) {
-  if (!isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return null;
-  }
+/* =====================================================
+   PASSWORD
+   ===================================================== */
 
-  const result = await apiRequest("CREATE_USER", { data });
+function togglePassword() {
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
+    if (
+        DOM.password.type ===
+        "password"
+    ) {
 
-  showMessage("User created successfully.", "success");
-  await loadUsers();
-  return result;
+        DOM.password.type =
+            "text";
+
+        DOM.togglePassword.textContent =
+            "Hide";
+
+    } else {
+
+        DOM.password.type =
+            "password";
+
+        DOM.togglePassword.textContent =
+            "Show";
+
+    }
+
 }
 
-async function updateUser(userId, data) {
-  if (!isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return null;
-  }
 
-  const result = await apiRequest("UPDATE_USER", {
-    userId,
-    data
-  });
+/* =====================================================
+   LOGIN UI
+   ===================================================== */
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
+function setLoginLoading(
+    loading
+) {
 
-  showMessage("User updated successfully.", "success");
-  await loadUsers();
-  return result;
+    DOM.loginButton.disabled =
+        loading;
+
+    if (loading) {
+
+        DOM.loginButtonText.classList.add(
+            "hidden"
+        );
+
+        DOM.loginLoader.classList.remove(
+            "hidden"
+        );
+
+    } else {
+
+        DOM.loginButtonText.classList.remove(
+            "hidden"
+        );
+
+        DOM.loginLoader.classList.add(
+            "hidden"
+        );
+
+    }
+
 }
 
-async function deleteUser(userId) {
-  if (!isAdmin()) {
-    showMessage("Administrator access required.", "error");
-    return null;
-  }
 
-  if (!confirm("Disable/delete this user?")) return null;
+function showLoginError(
+    message
+) {
 
-  const result = await apiRequest("DELETE_USER", {
-    userId
-  });
+    DOM.loginError.textContent =
+        message;
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
-
-  showMessage("User action completed.", "success");
-  await loadUsers();
-  return result;
 }
 
-function editUser(userId) {
-  showMessage(
-    "User editor is ready to be connected to the user form.",
-    "info"
-  );
-  console.log("EDIT USER:", userId);
+
+function clearLoginError() {
+
+    DOM.loginError.textContent =
+        "";
+
 }
 
-/* =========================================================
-   FORGOT PASSWORD
-   ========================================================= */
 
-function setupForgotPassword() {
-  const forgotButton = document.getElementById("forgotPasswordBtn");
-  const closeButton = document.getElementById("closeForgotPasswordBtn");
-  const backButton = document.getElementById("backToResetUsernameBtn");
+/* =====================================================
+   SESSION
+   ===================================================== */
 
-  const requestForm = document.getElementById("resetRequestForm");
-  const resetForm = document.getElementById("resetPasswordForm");
+function clearSession() {
 
-  if (forgotButton) {
-    forgotButton.addEventListener("click", event => {
-      event.preventDefault();
-      openForgotPassword();
-    });
-  }
+    App.token = null;
 
-  if (closeButton) {
-    closeButton.addEventListener("click", closeForgotPassword);
-  }
+    App.user = null;
 
-  if (backButton) {
-    backButton.addEventListener("click", () => {
-      setForgotStep(1);
-    });
-  }
+    localStorage.removeItem(
+        "GGL_QMS_TOKEN"
+    );
 
-  if (requestForm) {
-    requestForm.addEventListener("submit", async event => {
-      event.preventDefault();
+    localStorage.removeItem(
+        "GGL_QMS_USER"
+    );
 
-      const username =
-        document.getElementById("resetUsername")?.value.trim() || "";
+}
 
-      if (!username) {
-        setResetMessage("Enter your username.", "error");
+
+/* =====================================================
+   API ERROR
+   ===================================================== */
+
+function handleApiError(
+    response
+) {
+
+    if (
+        response &&
+        (
+            response.error ===
+            "SESSION_EXPIRED" ||
+            response.error ===
+            "AUTH_REQUIRED"
+        )
+    ) {
+
+        clearSession();
+
+        showLogin();
+
+        showLoginError(
+            "Your session has expired. Please sign in again."
+        );
+
         return;
-      }
 
-      const result = await apiRequest("FORGOT_PASSWORD", {
-        username
-      });
+    }
 
-      if (!result || !result.success) {
-        setResetMessage(getFriendlyError(result), "error");
-        return;
-      }
+    showToast(
+        getReadableError(
+            response?.error
+        ),
+        "error"
+    );
 
-      setResetMessage(
-        result.message ||
-          "If the account is eligible, password reset instructions have been processed.",
+}
+
+
+function getReadableError(
+    error
+) {
+
+    const errors = {
+
+        INVALID_CREDENTIALS:
+            "Invalid username or password.",
+
+        USER_INACTIVE:
+            "This user account is inactive.",
+
+        USER_NOT_FOUND:
+            "User account was not found.",
+
+        SESSION_EXPIRED:
+            "Your session has expired.",
+
+        AUTH_REQUIRED:
+            "Authentication is required.",
+
+        ACCESS_DENIED:
+            "You do not have permission for this action.",
+
+        USERNAME_ALREADY_EXISTS:
+            "That username already exists.",
+
+        USERNAME_REQUIRED:
+            "Username is required.",
+
+        PASSWORD_REQUIRED:
+            "Password is required.",
+
+        NETWORK_ERROR:
+            "Network connection failed."
+
+    };
+
+    return (
+        errors[error] ||
+        error ||
+        "An unexpected error occurred."
+    );
+
+}
+
+
+/* =====================================================
+   TOAST
+   ===================================================== */
+
+function showToast(
+    message,
+    type = "success"
+) {
+
+    let container =
+        document.querySelector(
+            ".toast-container"
+        );
+
+    if (!container) {
+
+        container =
+            document.createElement(
+                "div"
+            );
+
+        container.className =
+            "toast-container";
+
+        document.body.appendChild(
+            container
+        );
+
+    }
+
+
+    const toast =
+        document.createElement(
+            "div"
+        );
+
+    toast.className =
+        "toast " + type;
+
+    toast.textContent =
+        message;
+
+    container.appendChild(
+        toast
+    );
+
+
+    setTimeout(
+        () => {
+
+            toast.remove();
+
+        },
+        3500
+    );
+
+}
+
+
+/* =====================================================
+   ESCAPING
+   ===================================================== */
+
+function escapeHtml(
+    value
+) {
+
+    return String(
+        value ??
+        ""
+    )
+        .replace(
+            /&/g,
+            "&amp;"
+        )
+        .replace(
+            /</g,
+            "&lt;"
+        )
+        .replace(
+            />/g,
+            "&gt;"
+        )
+        .replace(
+            /"/g,
+            "&quot;"
+        )
+        .replace(
+            /'/g,
+            "&#039;"
+        );
+
+}
+
+
+function escapeJs(
+    value
+) {
+
+    return String(
+        value ??
+        ""
+    )
+        .replace(
+            /\\/g,
+            "\\\\"
+        )
+        .replace(
+            /'/g,
+            "\\'"
+        )
+        .replace(
+            /"/g,
+            '\\"'
+        );
+
+}
+
+
+/* =====================================================
+   TEMP USER FUNCTIONS
+   ===================================================== */
+
+function openAddUser() {
+
+    showToast(
+        "User administration will be activated next.",
         "success"
-      );
+    );
 
-      setForgotStep(2);
-    });
-  }
-
-  if (resetForm) {
-    resetForm.addEventListener("submit", async event => {
-      event.preventDefault();
-
-      const username =
-        document.getElementById("resetUsername")?.value.trim() || "";
-
-      const resetCode =
-        document.getElementById("resetCode")?.value.trim() || "";
-
-      const newPassword =
-        document.getElementById("newResetPassword")?.value || "";
-
-      const confirmPassword =
-        document.getElementById("confirmResetPassword")?.value || "";
-
-      if (!username || !resetCode || !newPassword || !confirmPassword) {
-        setResetMessage("Complete all reset fields.", "error");
-        return;
-      }
-
-      if (newPassword !== confirmPassword) {
-        setResetMessage("Passwords do not match.", "error");
-        return;
-      }
-
-      const result = await apiRequest("RESET_PASSWORD", {
-        username,
-        resetCode,
-        newPassword
-      });
-
-      if (!result || !result.success) {
-        setResetMessage(getFriendlyError(result), "error");
-        return;
-      }
-
-      setResetMessage(
-        result.message || "Password reset successfully.",
-        "success"
-      );
-    });
-  }
 }
+
+
+function editUser() {
+
+    showToast(
+        "User editing will be activated next.",
+        "success"
+    );
+
+}
+
+
+/* =====================================================
+   DEBUG
+   ===================================================== */
+
+window.generateCapaReport = generateCapaReport;
+window.downloadReportFile = downloadReportFile;
+window.loadReports = loadReports;
+
+window.QMS = {
+
+    App: App,
+
+    navigate: navigate,
+
+    apiRequest: apiRequest,
+
+    logout: handleLogout,
+
+    generateCapaReport: generateCapaReport,
+
+    downloadReportFile: downloadReportFile
+
+};
+document.getElementById("forgotPasswordBtn")
+  ?.addEventListener("click", openForgotPassword);
+
+document.getElementById("sendResetCodeBtn")
+  ?.addEventListener("click", sendResetCode);
+
+document.getElementById("resetPasswordBtn")
+  ?.addEventListener("click", resetPassword);
 
 function openForgotPassword() {
-  const modal = document.getElementById("forgotPasswordModal");
-  if (!modal) return;
+  document.getElementById("forgotPasswordModal").classList.add("show");
 
-  modal.style.display = "";
-  modal.setAttribute("aria-hidden", "false");
-  setForgotStep(1);
-  setResetMessage("", "info");
+  document.getElementById("forgotStep1").style.display = "block";
+  document.getElementById("forgotStep2").style.display = "none";
+
+  document.getElementById("resetUsername").value = "";
+  document.getElementById("resetCode").value = "";
+  document.getElementById("newResetPassword").value = "";
+  document.getElementById("confirmResetPassword").value = "";
+  document.getElementById("resetMessage").innerHTML = "";
 }
 
 function closeForgotPassword() {
-  const modal = document.getElementById("forgotPasswordModal");
-  if (!modal) return;
-
-  modal.style.display = "none";
-  modal.setAttribute("aria-hidden", "true");
+  document.getElementById("forgotPasswordModal").classList.remove("show");
 }
 
-function setForgotStep(step) {
-  const step1 = document.getElementById("forgotStep1");
-  const step2 = document.getElementById("forgotStep2");
+async function sendResetCode() {
 
-  if (step1) step1.style.display = step === 1 ? "" : "none";
-  if (step2) step2.style.display = step === 2 ? "" : "none";
-}
+  const username =
+    document.getElementById("resetUsername").value.trim();
 
-function setResetMessage(message, type) {
-  const element = document.getElementById("resetMessage");
-  if (!element) return;
-
-  element.textContent = message || "";
-  element.dataset.type = type || "info";
-}
-
-/* =========================================================
-   FILES
-   ========================================================= */
-
-async function uploadFile(module, recordId, file, description = "") {
-  if (!file) {
-    showMessage("Please select a file.", "error");
-    return null;
+  if (!username) {
+    showToast("Enter your username", "error");
+    return;
   }
 
-  const base64 = await fileToBase64(file);
+  const btn = document.getElementById("sendResetCodeBtn");
 
-  const result = await apiRequest("UPLOAD", {
-    module: MODULE_MAP[module] || String(module).toUpperCase(),
-    recordId,
-    fileName: file.name,
-    mimeType: file.type || "application/octet-stream",
-    base64,
-    description
-  });
+  btn.disabled = true;
+  btn.textContent = "Sending...";
 
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
+  try {
 
-  showMessage("File uploaded successfully.", "success");
-  return result;
-}
+    const result = await apiRequest({
+      action: "FORGOT_PASSWORD",
+      username: username
+    }, false);
 
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-
-    reader.onload = () => {
-      const result = String(reader.result || "");
-      const comma = result.indexOf(",");
-      resolve(comma >= 0 ? result.substring(comma + 1) : result);
-    };
-
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-async function getFile(fileId) {
-  const result = await apiRequest("GET_FILE", {
-    fileId
-  });
-
-  if (!result || !result.success) {
-    showMessage(getFriendlyError(result), "error");
-    return null;
-  }
-
-  if (result.url) {
-    window.open(result.url, "_blank", "noopener,noreferrer");
-  }
-
-  return result;
-}
-
-/* =========================================================
-   LOOKUPS / SYSTEM INFO
-   ========================================================= */
-
-async function loadLookups(type = "") {
-  const result = await apiRequest("LOOKUPS", { type });
-
-  if (!result || !result.success) {
-    console.warn("LOOKUPS ERROR:", result);
-    return [];
-  }
-
-  return result.lookups || result.data || result.rows || [];
-}
-
-async function getSystemInfo() {
-  const result = await apiRequest("SYSTEM_INFO");
-  console.log("SYSTEM INFO:", result);
-  return result;
-}
-
-/* =========================================================
-   MOBILE MENU
-   ========================================================= */
-
-function setupMobileMenu() {
-  const button = document.getElementById("mobileMenu");
-  const sidebar = document.getElementById("sidebar");
-
-  if (!button || !sidebar) return;
-
-  button.addEventListener("click", () => {
-    sidebar.classList.toggle("mobile-open");
-  });
-}
-
-function closeMobileMenu() {
-  const sidebar = document.getElementById("sidebar");
-  if (sidebar) sidebar.classList.remove("mobile-open");
-}
-
-/* =========================================================
-   TABLE RENDERING
-   ========================================================= */
-
-function buildTable(rows, userTable = false) {
-  if (!Array.isArray(rows) || !rows.length) return "";
-
-  const headers = Object.keys(rows[0]);
-
-  let html = `
-    <div class="qms-table-wrapper">
-      <table class="qms-table">
-        <thead>
-          <tr>
-  `;
-
-  headers.forEach(header => {
-    html += `<th>${escapeHtml(header)}</th>`;
-  });
-
-  if (userTable) html += "<th>Actions</th>";
-
-  html += `
-          </tr>
-        </thead>
-        <tbody>
-  `;
-
-  rows.forEach(row => {
-    html += "<tr>";
-
-    headers.forEach(header => {
-      html += `<td>${formatCell(row[header])}</td>`;
-    });
-
-    if (userTable) {
-      const userId = row["User ID"] || row.userId || "";
-      html += `
-        <td>
-          <button type="button"
-            onclick="editUser('${escapeJs(userId)}')">
-            Edit
-          </button>
-          <button type="button"
-            onclick="deleteUser('${escapeJs(userId)}')">
-            Disable
-          </button>
-        </td>
-      `;
+    if (!result.success) {
+      showToast(result.error || "Unable to process request", "error");
+      return;
     }
 
-    html += "</tr>";
-  });
+    document.getElementById("forgotStep1").style.display = "none";
+    document.getElementById("forgotStep2").style.display = "block";
 
-  html += `
-        </tbody>
-      </table>
-    </div>
-  `;
+    document.getElementById("resetMessage").innerHTML =
+      `<div class="success-message">
+        Reset code sent to your registered email.
+      </div>`;
 
-  return html;
-}
+  } catch (error) {
 
-/* =========================================================
-   HELPERS
-   ========================================================= */
+    showToast("Unable to connect to server", "error");
 
-function getPageContent() {
-  return document.getElementById("pageContent");
-}
+  } finally {
 
-function setText(id, value) {
-  const element = document.getElementById(id);
-  if (element) element.textContent = value ?? "";
-}
-
-function isAdmin() {
-  return !!(
-    currentUser &&
-    String(currentUser.role || "").trim().toUpperCase() === "ADMIN"
-  );
-}
-
-function showMessage(message, type = "info") {
-  console.log(`[${type}]`, message);
-
-  let container = document.getElementById("toastContainer");
-
-  if (!container) {
-    container = document.createElement("div");
-    container.id = "toastContainer";
-    document.body.appendChild(container);
-  }
-
-  const toast = document.createElement("div");
-  toast.className = `qms-toast qms-toast-${type}`;
-  toast.textContent = message || "";
-
-  container.appendChild(toast);
-
-  setTimeout(() => toast.remove(), 5000);
-}
-
-function getFriendlyError(result) {
-  if (!result) return "No response received from QMS API.";
-
-  switch (String(result.error || "").toUpperCase()) {
-    case "INVALID_CREDENTIALS":
-      return "Invalid username or password.";
-    case "USER_INACTIVE":
-      return "Your account is inactive. Contact the administrator.";
-    case "SESSION_EXPIRED":
-      return "Your session has expired. Please login again.";
-    case "INVALID_SESSION":
-      return "Invalid session. Please login again.";
-    case "UNAUTHORIZED":
-      return "You are not authorized for this action.";
-    case "ADMIN_REQUIRED":
-      return "Administrator access required.";
-    case "NETWORK_ERROR":
-      return "Unable to connect to the QMS API.";
-    case "INVALID_API_RESPONSE":
-      return "The QMS API returned an invalid response.";
-    default:
-      return result.message || result.error || "An unexpected error occurred.";
+    btn.disabled = false;
+    btn.textContent = "Send Reset Code";
   }
 }
 
-function escapeHtml(value) {
-  if (value === null || value === undefined) return "";
+async function resetPassword() {
 
-  return String(value)
-    .replaceAll("&", "&amp;")
-    .replaceAll("<", "&lt;")
-    .replaceAll(">", "&gt;")
-    .replaceAll('"', "&quot;")
-    .replaceAll("'", "&#039;");
-}
+  const username =
+    document.getElementById("resetUsername").value.trim();
 
-function escapeJs(value) {
-  return String(value ?? "")
-    .replaceAll("\\", "\\\\")
-    .replaceAll("'", "\\'")
-    .replaceAll('"', '\\"')
-    .replaceAll("\n", "\\n")
-    .replaceAll("\r", "\\r");
-}
+  const code =
+    document.getElementById("resetCode").value.trim();
 
-function formatCell(value) {
-  if (value === null || value === undefined) return "";
+  const password =
+    document.getElementById("newResetPassword").value;
 
-  if (typeof value === "object") {
-    return escapeHtml(JSON.stringify(value));
+  const confirmPassword =
+    document.getElementById("confirmResetPassword").value;
+
+  if (!code) {
+    showToast("Enter reset code", "error");
+    return;
   }
 
-  const text = String(value);
-
-  if (/^https?:\/\//i.test(text)) {
-    return `
-      <a href="${escapeHtml(text)}"
-         target="_blank"
-         rel="noopener noreferrer">
-        Open
-      </a>
-    `;
+  if (!password || password.length < 8) {
+    showToast("Password must contain at least 8 characters", "error");
+    return;
   }
 
-  return escapeHtml(text);
-}
+  if (password !== confirmPassword) {
+    showToast("Passwords do not match", "error");
+    return;
+  }
 
-/* =========================================================
-   FORM UTILITIES
-   ========================================================= */
+  const btn = document.getElementById("resetPasswordBtn");
 
-function formToObject(form) {
-  const data = {};
-  if (!form) return data;
+  btn.disabled = true;
+  btn.textContent = "Resetting...";
 
-  new FormData(form).forEach((value, key) => {
-    data[key] = value;
-  });
+  try {
 
-  return data;
-}
+    const result = await apiRequest({
+      action: "RESET_PASSWORD",
+      username: username,
+      code: code,
+      newPassword: password
+    }, false);
 
-function clearForm(form) {
-  if (form && typeof form.reset === "function") {
-    form.reset();
+    if (!result.success) {
+      showToast(result.error || "Password reset failed", "error");
+      return;
+    }
+
+    closeForgotPassword();
+
+    showToast(
+      "Password reset successfully. You can now login.",
+      "success"
+    );
+
+    document.getElementById("username").value = username;
+    document.getElementById("password").value = "";
+
+  } catch (error) {
+
+    showToast("Unable to connect to server", "error");
+
+  } finally {
+
+    btn.disabled = false;
+    btn.textContent = "Reset Password";
   }
 }
-
-/* =========================================================
-   DEBUG API
-   ========================================================= */
-
-window.QMS_DEBUG = {
-  api: API_URL,
-
-  getUser: () => currentUser,
-
-  getToken: () => sessionToken,
-
-  testAPI: () => apiRequest("SYSTEM_INFO"),
-
-  dashboard: () => apiRequest("DASHBOARD"),
-
-  clearSession: () => {
-    clearSession();
-    showLogin();
-  },
-
-  reloadDashboard: () => loadDashboard()
-};
-
-/* =========================================================
-   GLOBAL FUNCTIONS
-   ========================================================= */
-
-window.openModule = openModule;
-window.logout = logout;
-window.closeForgotPassword = closeForgotPassword;
-window.createRecord = createRecord;
-window.updateRecord = updateRecord;
-window.deleteRecord = deleteRecord;
-window.getRecord = getRecord;
-window.uploadFile = uploadFile;
-window.getFile = getFile;
-window.generateReport = generateReport;
-window.loadUsers = loadUsers;
-window.createUser = createUser;
-window.updateUser = updateUser;
-window.deleteUser = deleteUser;
-window.editUser = editUser;
-window.loadAuditLog = loadAuditLog;
-window.loadLookups = loadLookups;
-window.getSystemInfo = getSystemInfo;
-window.loadDashboard = loadDashboard;
-
-window.loadCAPA = loadCAPA;
-window.showCAPAForm = showCAPAForm;
-window.submitCAPAForm = submitCAPAForm;
-window.cancelCAPAForm = cancelCAPAForm;
-window.viewCAPA = viewCAPA;
-window.editCAPA = editCAPA;
-window.deleteCAPA = deleteCAPA;
-
-
-/* =========================================================
-   REPORT AUTO-DOWNLOAD
-   One Generate click creates and starts all requested exports.
-   ========================================================= */
